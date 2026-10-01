@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
@@ -24,47 +24,36 @@ import {
 } from "@/components/ui/select";
 import { formatKES } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
-import { borrowerName, borrowers, loanOutstanding, loans } from "@/lib/mock-data";
-
-export const Route = createFileRoute("/loans/")({
-  head: () => ({
-    meta: [
-      { title: "Loans — Karamu Lending Desk" },
-      {
-        name: "description",
-        content:
-          "Every loan on the book with principal, term, status and outstanding balance at 10% flat annual interest.",
-      },
-      { property: "og:title", content: "Loans — Karamu Lending Desk" },
-      {
-        property: "og:description",
-        content: "Every loan on the book with principal, term, status and outstanding balance.",
-      },
-    ],
-  }),
-  component: LoansPage,
-});
+import { borrowerName, loanOutstanding, useBorrowers, useCreateLoan, useLoans } from "@/lib/data";
 
 function CreateLoanDialog() {
   const [open, setOpen] = useState(false);
   const [borrowerId, setBorrowerId] = useState("");
   const [principal, setPrincipal] = useState("150000");
   const [term, setTerm] = useState("12");
+  const { data: borrowers } = useBorrowers();
+  const createLoan = useCreateLoan();
 
-  const quote = useMemo(
-    () => quoteLoan(Number(principal), Number(term)),
-    [principal, term],
-  );
+  const quote = useMemo(() => quoteLoan(Number(principal), Number(term)), [principal, term]);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // SUPABASE PLACEHOLDER:
-    // await supabase.rpc("create_loan", { borrower_id, principal, term_months, start_date })
-    // — insert the loan then generate its repayment schedule rows.
-    toast.success("Loan created (demo)", {
-      description: `${formatKES(quote.monthlyInstallment)} / month over ${quote.termMonths} months.`,
-    });
-    setOpen(false);
+    const form = new FormData(e.currentTarget);
+    const startDate = String(form.get("start_date"));
+    try {
+      await createLoan.mutateAsync({
+        borrower_id: borrowerId,
+        principal: Number(principal),
+        term_months: Number(term),
+        start_date: startDate,
+      });
+      toast.success("Loan created", {
+        description: `${formatKES(quote.monthlyInstallment)} / month over ${quote.termMonths} months.`,
+      });
+      setOpen(false);
+    } catch (err) {
+      toast.error("Could not create loan", { description: (err as Error).message });
+    }
   }
 
   return (
@@ -87,7 +76,7 @@ function CreateLoanDialog() {
                 <SelectValue placeholder="Select a borrower" />
               </SelectTrigger>
               <SelectContent>
-                {borrowers.map((b) => (
+                {(borrowers ?? []).map((b) => (
                   <SelectItem key={b.id} value={b.id}>
                     {b.full_name}
                   </SelectItem>
@@ -107,12 +96,7 @@ function CreateLoanDialog() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="term">Term (months)</Label>
-              <Input
-                id="term"
-                inputMode="numeric"
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-              />
+              <Input id="term" inputMode="numeric" value={term} onChange={(e) => setTerm(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="start_date">Start date</Label>
@@ -138,8 +122,8 @@ function CreateLoanDialog() {
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={!borrowerId}>
-              Create loan
+            <Button type="submit" disabled={!borrowerId || createLoan.isPending}>
+              {createLoan.isPending ? "Creating…" : "Create loan"}
             </Button>
           </DialogFooter>
         </form>
@@ -148,13 +132,15 @@ function CreateLoanDialog() {
   );
 }
 
-function LoansPage() {
-  // SUPABASE PLACEHOLDER: supabase.from("loans").select("*, borrowers(full_name)")
+export default function LoansIndexPage() {
+  const { data: loans, isLoading } = useLoans();
+  const { data: borrowers } = useBorrowers();
+
   return (
     <AdminLayout>
       <PageHeader eyebrow="Book" title="Loans" action={<CreateLoanDialog />} />
       <div className="p-6 md:p-8">
-        <Panel title="All loans" meta={`${loans.length} total`}>
+        <Panel title="All loans" meta={`${loans?.length ?? 0} total`}>
           <TableWrap>
             <thead>
               <tr className="border-b">
@@ -167,30 +153,37 @@ function LoansPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {loans.map((l) => (
-                <tr key={l.id} className="ledger-row">
-                  <td className="px-5 py-3">
-                    <Link
-                      to="/loans/$loanId"
-                      params={{ loanId: l.id }}
-                      className="text-muted-foreground hover:text-coral font-mono"
-                    >
-                      {l.ref}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3">{borrowerName(l.borrower_id)}</td>
-                  <td className="px-5 py-3 text-right font-mono tabular-nums">
-                    {formatKES(l.principal)}
-                  </td>
-                  <td className="px-5 py-3 text-right font-mono tabular-nums">
-                    {formatKES(loanOutstanding(l))}
-                  </td>
-                  <td className="text-muted-foreground px-5 py-3">{l.term_months} mo</td>
-                  <td className="px-5 py-3 text-right">
-                    <StatusBadge status={l.status} />
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="text-muted-foreground px-5 py-8 text-center">
+                    Loading…
                   </td>
                 </tr>
-              ))}
+              ) : (
+                (loans ?? []).map((l) => (
+                  <tr key={l.id} className="ledger-row">
+                    <td className="px-5 py-3">
+                      <Link
+                        to={`/loans/${l.id}`}
+                        className="text-muted-foreground hover:text-coral font-mono"
+                      >
+                        {l.ref}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3">{borrowerName(borrowers, l.borrower_id)}</td>
+                    <td className="px-5 py-3 text-right font-mono tabular-nums">
+                      {formatKES(l.principal)}
+                    </td>
+                    <td className="px-5 py-3 text-right font-mono tabular-nums">
+                      {formatKES(loanOutstanding(l))}
+                    </td>
+                    <td className="text-muted-foreground px-5 py-3">{l.term_months} mo</td>
+                    <td className="px-5 py-3 text-right">
+                      <StatusBadge status={l.status} />
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </TableWrap>
         </Panel>

@@ -1,41 +1,33 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { PortalLayout } from "@/components/portal-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
-import {
-  currentBorrowerId,
-  getBorrower,
-  loansForBorrower,
-  paymentsForLoan,
-} from "@/lib/mock-data";
+import { useCurrentBorrower, useLoansForBorrower, usePaymentsForLoan } from "@/lib/data";
 
-export const Route = createFileRoute("/portal/statement")({
-  head: () => ({
-    meta: [
-      { title: "Statement — Karamu Borrower Portal" },
-      {
-        name: "description",
-        content:
-          "Full repayment schedule with running balance, M-Pesa receipts and interest breakdown.",
-      },
-      { property: "og:title", content: "Statement — Karamu Borrower Portal" },
-      {
-        property: "og:description",
-        content:
-          "Full repayment schedule with running balance, M-Pesa receipts and interest breakdown.",
-      },
-    ],
-  }),
-  component: StatementPage,
-});
+export default function PortalStatementPage() {
+  const { data: borrower, isLoading: borrowerLoading } = useCurrentBorrower();
+  const { data: loans, isLoading: loansLoading } = useLoansForBorrower(borrower?.id);
+  const loan = (loans ?? [])[0];
+  const { data: loanPayments } = usePaymentsForLoan(loan?.id);
 
-function StatementPage() {
-  // SUPABASE PLACEHOLDER: select the signed-in borrower's loan, installments and payments.
-  const borrower = getBorrower(currentBorrowerId)!;
-  const loan = loansForBorrower(borrower.id)[0]!;
+  if (borrowerLoading || loansLoading) {
+    return (
+      <PortalLayout borrowerName="…">
+        <p className="text-muted-foreground text-sm">Loading…</p>
+      </PortalLayout>
+    );
+  }
+
+  if (!borrower || !loan) {
+    return (
+      <PortalLayout borrowerName={borrower?.full_name ?? "—"}>
+        <p className="text-muted-foreground text-sm">No loan statement available yet.</p>
+      </PortalLayout>
+    );
+  }
+
   const quote = quoteLoan(loan.principal, loan.term_months);
-  const loanPayments = paymentsForLoan(loan.id);
+  const payments = loanPayments ?? [];
 
   let running = quote.totalPayable;
   const rows = loan.schedule.map((i) => {
@@ -91,7 +83,7 @@ function StatementPage() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {rows.map((i) => (
-                <tr key={i.number} className="ledger-row">
+                <tr key={i.id} className="ledger-row">
                   <td className="px-5 py-3 font-mono">{pad2(i.number)}</td>
                   <td className="px-5 py-3 whitespace-nowrap">{formatDate(i.due_date)}</td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums">
@@ -115,10 +107,10 @@ function StatementPage() {
           M-Pesa receipts
         </p>
         <div className="space-y-3">
-          {loanPayments.map((p) => (
+          {payments.map((p) => (
             <div key={p.id} className="flex items-center justify-between">
               <div>
-                <p className="font-mono text-sm leading-none">{p.receipt}</p>
+                <p className="font-mono text-sm leading-none">{p.receipt ?? "—"}</p>
                 <p className="text-muted-foreground mt-1 text-[11px]">
                   {formatDate(p.paid_at)} · {p.channel}
                 </p>
@@ -128,7 +120,7 @@ function StatementPage() {
               </span>
             </div>
           ))}
-          {loanPayments.length === 0 ? (
+          {payments.length === 0 ? (
             <p className="text-muted-foreground text-sm">No receipts yet.</p>
           ) : null}
         </div>

@@ -1,38 +1,41 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { PortalLayout } from "@/components/portal-layout";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
-import {
-  currentBorrowerId,
-  getBorrower,
-  loanOutstanding,
-  loansForBorrower,
-  nextInstallment,
-} from "@/lib/mock-data";
+import { useCurrentBorrower, useLoansForBorrower, loanOutstanding, nextInstallment } from "@/lib/data";
 
-export const Route = createFileRoute("/portal/")({
-  head: () => ({
-    meta: [
-      { title: "My loan — Karamu Borrower Portal" },
-      {
-        name: "description",
-        content: "Your outstanding balance, next payment due and loan summary at a glance.",
-      },
-      { property: "og:title", content: "My loan — Karamu Borrower Portal" },
-      {
-        property: "og:description",
-        content: "Your outstanding balance, next payment due and loan summary at a glance.",
-      },
-    ],
-  }),
-  component: PortalDashboard,
-});
+export default function PortalIndexPage() {
+  const { data: borrower, isLoading: borrowerLoading } = useCurrentBorrower();
+  const { data: loans, isLoading: loansLoading } = useLoansForBorrower(borrower?.id);
 
-function PortalDashboard() {
-  // SUPABASE PLACEHOLDER: resolve the borrower from supabase.auth.getUser(), then
-  // select their loan + schedule and subscribe to realtime balance changes.
-  const borrower = getBorrower(currentBorrowerId)!;
-  const loan = loansForBorrower(borrower.id)[0]!;
+  if (borrowerLoading || loansLoading) {
+    return (
+      <PortalLayout borrowerName="…">
+        <p className="text-muted-foreground text-sm">Loading…</p>
+      </PortalLayout>
+    );
+  }
+
+  if (!borrower) {
+    return (
+      <PortalLayout borrowerName="—">
+        <p className="text-muted-foreground text-sm">
+          No borrower profile is linked to your account yet. Contact the lending desk.
+        </p>
+      </PortalLayout>
+    );
+  }
+
+  const loan = (loans ?? [])[0];
+
+  if (!loan) {
+    return (
+      <PortalLayout borrowerName={borrower.full_name}>
+        <p className="text-muted-foreground text-sm">You have no active loans yet.</p>
+      </PortalLayout>
+    );
+  }
+
   const outstanding = loanOutstanding(loan);
   const next = nextInstallment(loan);
   const quote = quoteLoan(loan.principal, loan.term_months);
@@ -114,7 +117,7 @@ function PortalDashboard() {
             .slice(-3)
             .reverse()
             .map((i) => (
-              <div key={i.number} className="flex items-center justify-between">
+              <div key={i.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <span className="bg-teal/15 text-teal grid size-8 shrink-0 place-items-center rounded-full font-mono text-xs font-bold">
                     {pad2(i.number)}

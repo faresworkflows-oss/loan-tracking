@@ -1,6 +1,11 @@
-import { Link } from "@tanstack/react-router";
+import { NavLink } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Brand } from "./admin-layout";
+
+function tabClass(isActive: boolean) {
+  const base = "text-muted-foreground rounded-full px-3 py-1.5 text-xs";
+  return isActive ? `${base} bg-card text-foreground font-semibold` : base;
+}
 
 export function PortalLayout({
   borrowerName,
@@ -18,19 +23,12 @@ export function PortalLayout({
         </div>
 
         <nav className="mb-6 flex gap-1">
-          <Link
-            to="/portal"
-            activeOptions={{ exact: true }}
-            className="text-muted-foreground rounded-full px-3 py-1.5 text-xs data-[status=active]:bg-card data-[status=active]:text-foreground data-[status=active]:font-semibold"
-          >
+          <NavLink to="/portal" end className={({ isActive }) => tabClass(isActive)}>
             Dashboard
-          </Link>
-          <Link
-            to="/portal/statement"
-            className="text-muted-foreground rounded-full px-3 py-1.5 text-xs data-[status=active]:bg-card data-[status=active]:text-foreground data-[status=active]:font-semibold"
-          >
+          </NavLink>
+          <NavLink to="/portal/statement" className={({ isActive }) => tabClass(isActive)}>
             Statement
-          </Link>
+          </NavLink>
         </nav>
 
         {children}

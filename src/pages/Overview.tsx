@@ -1,34 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatKES, formatShortDate } from "@/lib/format";
-import {
-  borrowerName,
-  loanOutstanding,
-  loans,
-  payments,
-  portfolioSummary,
-} from "@/lib/mock-data";
-
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Portfolio Overview — Karamu Lending Desk" },
-      {
-        name: "description",
-        content:
-          "Live outstanding book, disbursements, collections and overdue accounts for the Karamu loan portfolio.",
-      },
-      { property: "og:title", content: "Portfolio Overview — Karamu Lending Desk" },
-      {
-        property: "og:description",
-        content: "Live outstanding book, disbursements, collections and overdue accounts.",
-      },
-    ],
-  }),
-  component: Overview,
-});
+import { borrowerName, loanOutstanding, usePortfolioSummary, useBorrowers } from "@/lib/data";
 
 function Kpi({
   label,
@@ -61,12 +36,19 @@ function Kpi({
   );
 }
 
-function Overview() {
-  // SUPABASE PLACEHOLDER: aggregate from `loans` / `payments`, then subscribe
-  // to postgres_changes on both tables to keep these figures realtime.
-  const summary = portfolioSummary();
-  const recent = [...payments].sort((a, b) => b.paid_at.localeCompare(a.paid_at)).slice(0, 5);
-  const matched = payments.filter((p) => p.match_status === "matched").length;
+export default function OverviewPage() {
+  const { isLoading, summary, recentPayments, matchedCount, totalPaymentsCount, loans } =
+    usePortfolioSummary();
+  const { data: borrowers } = useBorrowers();
+
+  if (isLoading) {
+    return (
+      <AdminLayout>
+        <PageHeader eyebrow="Portfolio Overview" title="Outstanding book & collections" />
+        <div className="text-muted-foreground p-8 text-sm">Loading…</div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
@@ -96,7 +78,7 @@ function Overview() {
           <Kpi
             label="Collections this month"
             value={formatKES(summary.collected)}
-            note={`${matched} payments matched`}
+            note={`${matchedCount} payments matched`}
             tone="teal"
           />
           <Kpi
@@ -107,10 +89,7 @@ function Overview() {
           />
         </div>
 
-        <Panel
-          title="Recent M-Pesa payments"
-          meta={`matched ${matched} / ${payments.length}`}
-        >
+        <Panel title="Recent M-Pesa payments" meta={`matched ${matchedCount} / ${totalPaymentsCount}`}>
           <TableWrap>
             <thead>
               <tr className="border-b">
@@ -123,10 +102,10 @@ function Overview() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {recent.map((p) => (
+              {recentPayments.map((p) => (
                 <tr key={p.id} className="ledger-row">
-                  <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt}</td>
-                  <td className="px-5 py-3">{borrowerName(p.borrower_id)}</td>
+                  <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt ?? "—"}</td>
+                  <td className="px-5 py-3">{borrowerName(borrowers, p.borrower_id)}</td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums">
                     {formatKES(p.amount)}
                   </td>
@@ -137,6 +116,13 @@ function Overview() {
                   </td>
                 </tr>
               ))}
+              {recentPayments.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-muted-foreground px-5 py-8 text-center">
+                    No payments yet.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </TableWrap>
         </Panel>
@@ -158,14 +144,13 @@ function Overview() {
                 <tr key={l.id} className="ledger-row">
                   <td className="px-5 py-3">
                     <Link
-                      to="/loans/$loanId"
-                      params={{ loanId: l.id }}
+                      to={`/loans/${l.id}`}
                       className="text-muted-foreground hover:text-coral font-mono"
                     >
                       {l.ref}
                     </Link>
                   </td>
-                  <td className="px-5 py-3">{borrowerName(l.borrower_id)}</td>
+                  <td className="px-5 py-3">{borrowerName(borrowers, l.borrower_id)}</td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums">
                     {formatKES(l.principal)}
                   </td>

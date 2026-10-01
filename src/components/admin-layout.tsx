@@ -1,12 +1,12 @@
-import { Link } from "@tanstack/react-router";
+import { NavLink } from "react-router-dom";
 import type { ReactNode } from "react";
 
 const NAV = [
-  { to: "/", label: "Overview", exact: true },
-  { to: "/loans", label: "Loans", exact: false },
-  { to: "/borrowers", label: "Borrowers", exact: false },
-  { to: "/payments", label: "M-Pesa Matching", exact: false },
-  { to: "/notifications", label: "SMS Log", exact: false },
+  { to: "/", label: "Overview", end: true },
+  { to: "/loans", label: "Loans", end: false },
+  { to: "/borrowers", label: "Borrowers", end: false },
+  { to: "/payments", label: "M-Pesa Matching", end: false },
+  { to: "/notifications", label: "SMS Log", end: false },
 ] as const;
 
 export function Brand({ subtitle }: { subtitle?: string }) {
@@ -93,6 +93,13 @@ export function Th({
   );
 }
 
+function navLinkClass(isActive: boolean, mobile = false) {
+  const base = mobile
+    ? "text-muted-foreground shrink-0 rounded-full px-3 py-1.5 text-xs"
+    : "text-muted-foreground hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2 transition-colors";
+  return isActive ? `${base} bg-coral text-ink font-semibold` : base;
+}
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="bg-background text-foreground flex min-h-screen">
@@ -102,23 +109,23 @@ export function AdminLayout({ children }: { children: ReactNode }) {
         </div>
         <nav className="space-y-1 text-sm">
           {NAV.map((item) => (
-            <Link
+            <NavLink
               key={item.to}
               to={item.to}
-              activeOptions={{ exact: item.exact }}
-              className="text-muted-foreground hover:text-foreground flex items-center gap-3 rounded-lg px-3 py-2 transition-colors data-[status=active]:bg-coral data-[status=active]:text-ink data-[status=active]:font-semibold"
+              end={item.end}
+              className={({ isActive }) => navLinkClass(isActive)}
             >
               <span className="grid size-4 shrink-0 place-items-center">
                 <span className="size-2.5 rounded-[2px] bg-current opacity-60" />
               </span>
               {item.label}
-            </Link>
+            </NavLink>
           ))}
         </nav>
         <div className="mt-auto border-t pt-6">
-          <Link to="/portal" className="text-muted-foreground hover:text-foreground text-xs">
+          <NavLink to="/portal" className="text-muted-foreground hover:text-foreground text-xs">
             Switch to borrower portal →
-          </Link>
+          </NavLink>
           <div className="mt-4 flex items-center gap-2.5">
             <div className="bg-teal/20 text-teal grid size-8 place-items-center rounded-full font-mono text-xs font-bold">
               AO
@@ -134,14 +141,14 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       <div className="min-w-0 flex-1">
         <nav className="flex gap-1 overflow-x-auto border-b px-4 py-3 md:hidden">
           {NAV.map((item) => (
-            <Link
+            <NavLink
               key={item.to}
               to={item.to}
-              activeOptions={{ exact: item.exact }}
-              className="text-muted-foreground shrink-0 rounded-full px-3 py-1.5 text-xs data-[status=active]:bg-coral data-[status=active]:text-ink data-[status=active]:font-semibold"
+              end={item.end}
+              className={({ isActive }) => navLinkClass(isActive, true)}
             >
               {item.label}
-            </Link>
+            </NavLink>
           ))}
         </nav>
         {children}

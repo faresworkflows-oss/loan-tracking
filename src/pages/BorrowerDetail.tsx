@@ -1,40 +1,39 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { Link, useParams } from "react-router-dom";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime, formatKES } from "@/lib/format";
 import {
-  getBorrower,
+  useBorrower,
+  useLoansForBorrower,
+  usePaymentsForBorrower,
   loanOutstanding,
-  loansForBorrower,
-  paymentsForBorrower,
-} from "@/lib/mock-data";
+} from "@/lib/data";
 
-export const Route = createFileRoute("/borrowers/$borrowerId")({
-  head: () => ({
-    meta: [
-      { title: "Borrower detail — Karamu Lending Desk" },
-      { name: "description", content: "Loans and payment history for a single borrower." },
-      { property: "og:title", content: "Borrower detail — Karamu Lending Desk" },
-      { property: "og:description", content: "Loans and payment history for a single borrower." },
-    ],
-  }),
-  component: BorrowerDetail,
-  notFoundComponent: () => (
-    <AdminLayout>
-      <PageHeader eyebrow="Book" title="Borrower not found" />
-    </AdminLayout>
-  ),
-});
+export default function BorrowerDetailPage() {
+  const { borrowerId } = useParams<{ borrowerId: string }>();
+  const { data: borrower, isLoading: borrowerLoading } = useBorrower(borrowerId);
+  const { data: theirLoans } = useLoansForBorrower(borrowerId);
+  const { data: theirPayments } = usePaymentsForBorrower(borrowerId);
 
-function BorrowerDetail() {
-  const { borrowerId } = Route.useParams();
-  // SUPABASE PLACEHOLDER: supabase.from("borrowers").select("*").eq("id", borrowerId).single()
-  const borrower = getBorrower(borrowerId);
-  if (!borrower) throw notFound();
+  if (borrowerLoading) {
+    return (
+      <AdminLayout>
+        <PageHeader eyebrow="Book" title="Loading…" />
+      </AdminLayout>
+    );
+  }
 
-  const theirLoans = loansForBorrower(borrower.id);
-  const theirPayments = paymentsForBorrower(borrower.id);
-  const owed = theirLoans.reduce((s, l) => s + loanOutstanding(l), 0);
+  if (!borrower) {
+    return (
+      <AdminLayout>
+        <PageHeader eyebrow="Book" title="Borrower not found" />
+      </AdminLayout>
+    );
+  }
+
+  const loans = theirLoans ?? [];
+  const payments = theirPayments ?? [];
+  const owed = loans.reduce((s, l) => s + loanOutstanding(l), 0);
 
   return (
     <AdminLayout>
@@ -61,17 +60,17 @@ function BorrowerDetail() {
           </div>
           <div>
             <p className="text-muted-foreground text-[11px] tracking-[0.15em] uppercase">Email</p>
-            <p className="mt-1 font-mono text-sm break-all">{borrower.email}</p>
+            <p className="mt-1 font-mono text-sm break-all">{borrower.email ?? "—"}</p>
           </div>
           <div>
             <p className="text-muted-foreground text-[11px] tracking-[0.15em] uppercase">
               National ID
             </p>
-            <p className="mt-1 font-mono">{borrower.national_id}</p>
+            <p className="mt-1 font-mono">{borrower.national_id ?? "—"}</p>
           </div>
         </div>
 
-        <Panel title="Loans" meta={`${theirLoans.length} total`}>
+        <Panel title="Loans" meta={`${loans.length} total`}>
           <TableWrap>
             <thead>
               <tr className="border-b">
@@ -83,12 +82,11 @@ function BorrowerDetail() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {theirLoans.map((l) => (
+              {loans.map((l) => (
                 <tr key={l.id} className="ledger-row">
                   <td className="px-5 py-3">
                     <Link
-                      to="/loans/$loanId"
-                      params={{ loanId: l.id }}
+                      to={`/loans/${l.id}`}
                       className="text-muted-foreground hover:text-coral font-mono"
                     >
                       {l.ref}
@@ -110,7 +108,7 @@ function BorrowerDetail() {
           </TableWrap>
         </Panel>
 
-        <Panel title="Payment history" meta={`${theirPayments.length} payments`}>
+        <Panel title="Payment history" meta={`${payments.length} payments`}>
           <TableWrap>
             <thead>
               <tr className="border-b">
@@ -122,9 +120,9 @@ function BorrowerDetail() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {theirPayments.map((p) => (
+              {payments.map((p) => (
                 <tr key={p.id} className="ledger-row">
-                  <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt}</td>
+                  <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt ?? "—"}</td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums">
                     {formatKES(p.amount)}
                   </td>

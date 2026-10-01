@@ -1,58 +1,50 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { useParams } from "react-router-dom";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate, formatDateTime, formatKES, pad2 } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
 import {
-  borrowerName,
-  getLoan,
+  useLoan,
+  usePaymentsForLoan,
+  usePenaltiesForLoan,
+  useBorrower,
   loanOutstanding,
   loanPaid,
-  paymentsForLoan,
-  penaltiesForLoan,
-} from "@/lib/mock-data";
+} from "@/lib/data";
 
-export const Route = createFileRoute("/loans/$loanId")({
-  head: () => ({
-    meta: [
-      { title: "Loan detail — Karamu Lending Desk" },
-      {
-        name: "description",
-        content: "Full repayment schedule, payment history and penalty history for a loan.",
-      },
-      { property: "og:title", content: "Loan detail — Karamu Lending Desk" },
-      {
-        property: "og:description",
-        content: "Full repayment schedule, payment history and penalty history for a loan.",
-      },
-    ],
-  }),
-  component: LoanDetail,
-  notFoundComponent: () => (
-    <AdminLayout>
-      <PageHeader eyebrow="Loan detail" title="Loan not found" />
-    </AdminLayout>
-  ),
-});
+export default function LoanDetailPage() {
+  const { loanId } = useParams<{ loanId: string }>();
+  const { data: loan, isLoading } = useLoan(loanId);
+  const { data: borrower } = useBorrower(loan?.borrower_id);
+  const { data: loanPayments } = usePaymentsForLoan(loanId);
+  const { data: loanPenalties } = usePenaltiesForLoan(loanId);
 
-function LoanDetail() {
-  const { loanId } = Route.useParams();
-  // SUPABASE PLACEHOLDER:
-  // supabase.from("loans").select("*, installments(*), payments(*), penalties(*)")
-  //   .eq("id", loanId).single()
-  const loan = getLoan(loanId);
-  if (!loan) throw notFound();
+  if (isLoading) {
+    return (
+      <AdminLayout>
+        <PageHeader eyebrow="Loan detail" title="Loading…" />
+      </AdminLayout>
+    );
+  }
+
+  if (!loan) {
+    return (
+      <AdminLayout>
+        <PageHeader eyebrow="Loan detail" title="Loan not found" />
+      </AdminLayout>
+    );
+  }
 
   const quote = quoteLoan(loan.principal, loan.term_months);
-  const loanPayments = paymentsForLoan(loan.id);
-  const loanPenalties = penaltiesForLoan(loan.id);
+  const payments = loanPayments ?? [];
+  const penalties = loanPenalties ?? [];
 
   return (
     <AdminLayout>
       <PageHeader
         eyebrow="Loan detail"
-        title={`${loan.ref} · ${borrowerName(loan.borrower_id)}`}
+        title={`${loan.ref} · ${borrower?.full_name ?? "…"}`}
         action={
           <div className="text-right">
             <p className="text-muted-foreground text-[11px] tracking-[0.15em] uppercase">
@@ -92,10 +84,7 @@ function LoanDetail() {
           </TabsList>
 
           <TabsContent value="schedule" className="mt-6">
-            <Panel
-              title="Repayment schedule"
-              meta={`${loan.term_months} installments · 10% flat p.a.`}
-            >
+            <Panel title="Repayment schedule" meta={`${loan.term_months} installments · 10% flat p.a.`}>
               <TableWrap>
                 <thead>
                   <tr className="border-b">
@@ -108,7 +97,7 @@ function LoanDetail() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {loan.schedule.map((i) => (
-                    <tr key={i.number} className="ledger-row">
+                    <tr key={i.id} className="ledger-row">
                       <td className="px-5 py-3 font-mono">{pad2(i.number)}</td>
                       <td className="px-5 py-3">{formatDate(i.due_date)}</td>
                       <td className="px-5 py-3 text-right font-mono tabular-nums">
@@ -132,7 +121,7 @@ function LoanDetail() {
           </TabsContent>
 
           <TabsContent value="payments" className="mt-6">
-            <Panel title="Payment history" meta={`${loanPayments.length} payments`}>
+            <Panel title="Payment history" meta={`${payments.length} payments`}>
               <TableWrap>
                 <thead>
                   <tr className="border-b">
@@ -144,9 +133,9 @@ function LoanDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {loanPayments.map((p) => (
+                  {payments.map((p) => (
                     <tr key={p.id} className="ledger-row">
-                      <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt}</td>
+                      <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt ?? "—"}</td>
                       <td className="px-5 py-3 font-mono">
                         {p.installment_number ? pad2(p.installment_number) : "—"}
                       </td>
@@ -161,7 +150,7 @@ function LoanDetail() {
                       </td>
                     </tr>
                   ))}
-                  {loanPayments.length === 0 ? (
+                  {payments.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="text-muted-foreground px-5 py-8 text-center">
                         No payments recorded yet.
@@ -174,7 +163,7 @@ function LoanDetail() {
           </TabsContent>
 
           <TabsContent value="penalties" className="mt-6">
-            <Panel title="Penalty history" meta={`${loanPenalties.length} charges`}>
+            <Panel title="Penalty history" meta={`${penalties.length} charges`}>
               <TableWrap>
                 <thead>
                   <tr className="border-b">
@@ -185,7 +174,7 @@ function LoanDetail() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {loanPenalties.map((p) => (
+                  {penalties.map((p) => (
                     <tr key={p.id} className="ledger-row">
                       <td className="px-5 py-3 font-mono">{pad2(p.installment_number)}</td>
                       <td className="px-5 py-3">{p.reason}</td>
@@ -195,7 +184,7 @@ function LoanDetail() {
                       <td className="text-muted-foreground px-5 py-3">{formatDate(p.charged_at)}</td>
                     </tr>
                   ))}
-                  {loanPenalties.length === 0 ? (
+                  {penalties.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="text-muted-foreground px-5 py-8 text-center">
                         No penalties on this loan.
