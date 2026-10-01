@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BorrowersIndexRouteImport } from './routes/borrowers.index'
+import { Route as BorrowersBorrowerIdRouteImport } from './routes/borrowers.$borrowerId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BorrowersIndexRoute = BorrowersIndexRouteImport.update({
+  id: '/borrowers/',
+  path: '/borrowers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BorrowersBorrowerIdRoute = BorrowersBorrowerIdRouteImport.update({
+  id: '/borrowers/$borrowerId',
+  path: '/borrowers/$borrowerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/borrowers/$borrowerId': typeof BorrowersBorrowerIdRoute
+  '/borrowers/': typeof BorrowersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/borrowers/$borrowerId': typeof BorrowersBorrowerIdRoute
+  '/borrowers': typeof BorrowersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/borrowers/$borrowerId': typeof BorrowersBorrowerIdRoute
+  '/borrowers/': typeof BorrowersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/borrowers/$borrowerId' | '/borrowers/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/borrowers/$borrowerId' | '/borrowers'
+  id: '__root__' | '/' | '/borrowers/$borrowerId' | '/borrowers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BorrowersBorrowerIdRoute: typeof BorrowersBorrowerIdRoute
+  BorrowersIndexRoute: typeof BorrowersIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/borrowers/': {
+      id: '/borrowers/'
+      path: '/borrowers'
+      fullPath: '/borrowers/'
+      preLoaderRoute: typeof BorrowersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/borrowers/$borrowerId': {
+      id: '/borrowers/$borrowerId'
+      path: '/borrowers/$borrowerId'
+      fullPath: '/borrowers/$borrowerId'
+      preLoaderRoute: typeof BorrowersBorrowerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BorrowersBorrowerIdRoute: BorrowersBorrowerIdRoute,
+  BorrowersIndexRoute: BorrowersIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
