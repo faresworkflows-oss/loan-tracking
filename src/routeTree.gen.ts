@@ -10,12 +10,26 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as BorrowersIndexRouteImport } from './routes/borrowers.index'
 import { Route as BorrowersBorrowerIdRouteImport } from './routes/borrowers.$borrowerId'
+import { Route as LoansIndexRouteImport } from './routes/loans.index'
+import { Route as LoansLoanIdRouteImport } from './routes/loans.$loanId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentsRoute = PaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BorrowersIndexRoute = BorrowersIndexRouteImport.update({
@@ -28,35 +42,83 @@ const BorrowersBorrowerIdRoute = BorrowersBorrowerIdRouteImport.update({
   path: '/borrowers/$borrowerId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoansIndexRoute = LoansIndexRouteImport.update({
+  id: '/loans/',
+  path: '/loans/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoansLoanIdRoute = LoansLoanIdRouteImport.update({
+  id: '/loans/$loanId',
+  path: '/loans/$loanId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/notifications': typeof NotificationsRoute
+  '/payments': typeof PaymentsRoute
   '/borrowers/$borrowerId': typeof BorrowersBorrowerIdRoute
+  '/loans/$loanId': typeof LoansLoanIdRoute
   '/borrowers/': typeof BorrowersIndexRoute
+  '/loans/': typeof LoansIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/notifications': typeof NotificationsRoute
+  '/payments': typeof PaymentsRoute
   '/borrowers/$borrowerId': typeof BorrowersBorrowerIdRoute
+  '/loans/$loanId': typeof LoansLoanIdRoute
   '/borrowers': typeof BorrowersIndexRoute
+  '/loans': typeof LoansIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/notifications': typeof NotificationsRoute
+  '/payments': typeof PaymentsRoute
   '/borrowers/$borrowerId': typeof BorrowersBorrowerIdRoute
+  '/loans/$loanId': typeof LoansLoanIdRoute
   '/borrowers/': typeof BorrowersIndexRoute
+  '/loans/': typeof LoansIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/borrowers/$borrowerId' | '/borrowers/'
+  fullPaths:
+    | '/'
+    | '/notifications'
+    | '/payments'
+    | '/borrowers/$borrowerId'
+    | '/loans/$loanId'
+    | '/borrowers/'
+    | '/loans/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/borrowers/$borrowerId' | '/borrowers'
-  id: '__root__' | '/' | '/borrowers/$borrowerId' | '/borrowers/'
+  to:
+    | '/'
+    | '/notifications'
+    | '/payments'
+    | '/borrowers/$borrowerId'
+    | '/loans/$loanId'
+    | '/borrowers'
+    | '/loans'
+  id:
+    | '__root__'
+    | '/'
+    | '/notifications'
+    | '/payments'
+    | '/borrowers/$borrowerId'
+    | '/loans/$loanId'
+    | '/borrowers/'
+    | '/loans/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  NotificationsRoute: typeof NotificationsRoute
+  PaymentsRoute: typeof PaymentsRoute
   BorrowersBorrowerIdRoute: typeof BorrowersBorrowerIdRoute
+  LoansLoanIdRoute: typeof LoansLoanIdRoute
   BorrowersIndexRoute: typeof BorrowersIndexRoute
+  LoansIndexRoute: typeof LoansIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -66,6 +128,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payments': {
+      id: '/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof PaymentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/borrowers/': {
@@ -82,13 +158,31 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BorrowersBorrowerIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/loans/': {
+      id: '/loans/'
+      path: '/loans'
+      fullPath: '/loans/'
+      preLoaderRoute: typeof LoansIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/loans/$loanId': {
+      id: '/loans/$loanId'
+      path: '/loans/$loanId'
+      fullPath: '/loans/$loanId'
+      preLoaderRoute: typeof LoansLoanIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  NotificationsRoute: NotificationsRoute,
+  PaymentsRoute: PaymentsRoute,
   BorrowersBorrowerIdRoute: BorrowersBorrowerIdRoute,
+  LoansLoanIdRoute: LoansLoanIdRoute,
   BorrowersIndexRoute: BorrowersIndexRoute,
+  LoansIndexRoute: LoansIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
