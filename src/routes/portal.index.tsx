@@ -32,7 +32,7 @@ function PortalDashboard() {
   // SUPABASE PLACEHOLDER: resolve the borrower from supabase.auth.getUser(), then
   // select their loan + schedule and subscribe to realtime balance changes.
   const borrower = getBorrower(currentBorrowerId)!;
-  const loan = loansForBorrower(borrower.id)[0];
+  const loan = loansForBorrower(borrower.id)[0]!;
   const outstanding = loanOutstanding(loan);
   const next = nextInstallment(loan);
   const quote = quoteLoan(loan.principal, loan.term_months);

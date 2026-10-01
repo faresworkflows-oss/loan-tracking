@@ -33,7 +33,7 @@ export const Route = createFileRoute("/portal/statement")({
 function StatementPage() {
   // SUPABASE PLACEHOLDER: select the signed-in borrower's loan, installments and payments.
   const borrower = getBorrower(currentBorrowerId)!;
-  const loan = loansForBorrower(borrower.id)[0];
+  const loan = loansForBorrower(borrower.id)[0]!;
   const quote = quoteLoan(loan.principal, loan.term_months);
   const loanPayments = paymentsForLoan(loan.id);
 
