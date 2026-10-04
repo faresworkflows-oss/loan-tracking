@@ -1,5 +1,6 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
+import { useAuth, signOut } from "@/lib/auth";
 
 const NAV = [
   { to: "/", label: "Overview", end: true },
@@ -100,6 +101,36 @@ function navLinkClass(isActive: boolean, mobile = false) {
   return isActive ? `${base} bg-coral text-ink font-semibold` : base;
 }
 
+function AdminIdentity() {
+  const { session } = useAuth();
+  const navigate = useNavigate();
+  const email = session?.user.email ?? "";
+  const initials = email ? email.slice(0, 2).toUpperCase() : "—";
+
+  async function handleSignOut() {
+    await signOut();
+    navigate("/login", { replace: true });
+  }
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="bg-teal/20 text-teal grid size-8 shrink-0 place-items-center rounded-full font-mono text-xs font-bold">
+        {initials}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm leading-none font-medium">{email || "Signed in"}</p>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="text-muted-foreground hover:text-coral mt-1 text-[11px] underline-offset-2 hover:underline"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="bg-background text-foreground flex min-h-screen">
@@ -126,14 +157,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <NavLink to="/portal" className="text-muted-foreground hover:text-foreground text-xs">
             Switch to borrower portal →
           </NavLink>
-          <div className="mt-4 flex items-center gap-2.5">
-            <div className="bg-teal/20 text-teal grid size-8 place-items-center rounded-full font-mono text-xs font-bold">
-              AO
-            </div>
-            <div>
-              <p className="text-sm leading-none font-medium">A. Otieno</p>
-              <p className="text-muted-foreground mt-1 text-[11px]">Collections Lead</p>
-            </div>
+          <div className="mt-4">
+            <AdminIdentity />
           </div>
         </div>
       </aside>

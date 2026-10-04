@@ -179,17 +179,27 @@ export function useCurrentBorrower() {
   });
 }
 
+/**
+ * Creates a borrower AND their Supabase Auth login in one step via the
+ * `create-borrower` edge function (which uses the service-role key
+ * server-side). Returns a generated temporary password the admin should
+ * pass on to the borrower — there is no other way to retrieve it later.
+ */
 export function useCreateBorrower() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       full_name: string;
       phone: string;
-      email?: string;
+      email: string;
       national_id?: string;
-    }) => {
-      const { error } = await supabase.from("borrowers").insert(input);
+    }): Promise<{ temp_password: string }> => {
+      const { data, error } = await supabase.functions.invoke("create-borrower", {
+        body: input,
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["borrowers"] }),
   });
