@@ -14,10 +14,10 @@ export function Brand({ subtitle }: { subtitle?: string }) {
   return (
     <div className="flex items-center gap-2.5">
       <div className="bg-coral text-ink font-display grid size-9 place-items-center rounded-[10px] text-lg font-bold">
-        K
+        M
       </div>
       <div>
-        <p className="font-display text-base leading-none font-semibold">Karamu</p>
+        <p className="font-display text-base leading-none font-semibold">Mutiso's</p>
         {subtitle ? (
           <p className="text-muted-foreground mt-0.5 text-[11px] tracking-wide">{subtitle}</p>
         ) : null}

@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Karamu Lending design system — "Technicolor ledger".
+ * Mutiso's Lending design system — "Technicolor ledger".
  * Dark ink surfaces, coral accent, teal/gold/coral status colors,
  * Space Grotesk (display) + Archivo (body) + Space Mono (figures).
  * All colors are oklch tokens. Never hardcode colors in components.
