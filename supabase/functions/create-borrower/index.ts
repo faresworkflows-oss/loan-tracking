@@ -12,6 +12,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY (auto-provided by the platform)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { sendAndLog } from "../_shared/sms.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -116,6 +117,15 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    await sendAndLog({
+      supabaseUrl,
+      serviceRoleKey,
+      borrowerId: borrower.id,
+      phone,
+      type: "account_created",
+      message: `Welcome to Mutiso's Lending. Log in at your portal with email ${email} and temporary password ${tempPassword}. Please change it after logging in.`,
+    });
 
     return new Response(JSON.stringify({ borrower, temp_password: tempPassword }), {
       status: 200,

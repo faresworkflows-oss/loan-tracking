@@ -15,7 +15,7 @@ import { addMonths, quoteLoan } from "./loan-math";
 export type InstallmentStatus = "pending" | "paid" | "late" | "penalized";
 export type LoanStatus = "active" | "completed" | "defaulted";
 export type MatchStatus = "matched" | "unmatched";
-export type SmsType = "reminder" | "overdue" | "payment_received";
+export type SmsType = "reminder" | "overdue" | "payment_received" | "account_created";
 
 export interface Borrower {
   id: string;
@@ -360,12 +360,9 @@ export function usePaymentsForBorrower(borrowerId: string | undefined) {
 }
 
 /**
- * Matches an unmatched C2B/STK payment to a borrower + installment, then
- * updates the schedule row and the loan's outstanding balance to match.
- *
- * NOTE: for production, move this multi-step update into a Postgres RPC
- * (SECURITY DEFINER function) so it runs as one atomic transaction instead
- * of sequential client calls.
+ * Matches an unmatched C2B/STK payment to a borrower + installment via the
+ * match-payment edge function — runs server-side (atomic from the client's
+ * perspective) and sends the payment-received SMS as part of the same call.
  */
 export function useMatchPayment() {
   const queryClient = useQueryClient();
@@ -376,59 +373,31 @@ export function useMatchPayment() {
       loanId: string;
       installmentId: string;
     }) => {
-      const { data: installment, error: instError } = await supabase
-        .from("repayment_schedule")
-        .select("*")
-        .eq("id", input.installmentId)
-        .single();
-      if (instError) throw instError;
-
-      const { data: payment, error: payError } = await supabase
-        .from("payments")
-        .select("amount")
-        .eq("id", input.paymentId)
-        .single();
-      if (payError) throw payError;
-
-      const newAmountPaid = Number(installment.amount_paid) + Number(payment.amount);
-      const newStatus = newAmountPaid >= Number(installment.amount_due) ? "paid" : installment.status;
-
-      const { error: updateInstError } = await supabase
-        .from("repayment_schedule")
-        .update({ amount_paid: newAmountPaid, status: newStatus })
-        .eq("id", input.installmentId);
-      if (updateInstError) throw updateInstError;
-
-      const { error: updatePayError } = await supabase
-        .from("payments")
-        .update({
-          borrower_id: input.borrowerId,
-          loan_id: input.loanId,
-          matched_installment_id: input.installmentId,
-          status: "matched",
-        })
-        .eq("id", input.paymentId);
-      if (updatePayError) throw updatePayError;
-
-      const { data: scheduleRows, error: scheduleError } = await supabase
-        .from("repayment_schedule")
-        .select("amount_due, amount_paid")
-        .eq("loan_id", input.loanId);
-      if (scheduleError) throw scheduleError;
-
-      const outstanding = scheduleRows.reduce(
-        (sum, r) => sum + (Number(r.amount_due) - Number(r.amount_paid)),
-        0,
-      );
-      const { error: loanError } = await supabase
-        .from("loans")
-        .update({ outstanding_balance: outstanding })
-        .eq("id", input.loanId);
-      if (loanError) throw loanError;
+      const { data, error } = await supabase.functions.invoke("match-payment", { body: input });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payments"] });
       queryClient.invalidateQueries({ queryKey: ["loans"] });
+    },
+  });
+}
+
+/** Triggers an STK push to the borrower's phone for a specific installment. */
+export function useRequestStkPush() {
+  return useMutation({
+    mutationFn: async (input: {
+      loanId: string;
+      installmentId: string;
+      phone: string;
+      amount: number;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("mpesa-stk-push", { body: input });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
   });
 }

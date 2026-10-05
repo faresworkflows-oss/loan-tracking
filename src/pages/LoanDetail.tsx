@@ -1,6 +1,8 @@
 import { useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate, formatDateTime, formatKES, pad2 } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
@@ -9,6 +11,7 @@ import {
   usePaymentsForLoan,
   usePenaltiesForLoan,
   useBorrower,
+  useRequestStkPush,
   loanOutstanding,
   loanPaid,
 } from "@/lib/data";
@@ -19,6 +22,22 @@ export default function LoanDetailPage() {
   const { data: borrower } = useBorrower(loan?.borrower_id);
   const { data: loanPayments } = usePaymentsForLoan(loanId);
   const { data: loanPenalties } = usePenaltiesForLoan(loanId);
+  const requestStkPush = useRequestStkPush();
+
+  async function handleRequestPayment(installmentId: string, amount: number) {
+    if (!loan || !borrower) return;
+    try {
+      await requestStkPush.mutateAsync({
+        loanId: loan.id,
+        installmentId,
+        phone: borrower.phone,
+        amount,
+      });
+      toast.success("STK push sent", { description: `Prompt sent to ${borrower.phone}.` });
+    } catch (err) {
+      toast.error("Could not send STK push", { description: (err as Error).message });
+    }
+  }
 
   if (isLoading) {
     return (
@@ -93,6 +112,7 @@ export default function LoanDetailPage() {
                     <Th right>Amount due</Th>
                     <Th right>Amount paid</Th>
                     <Th right>Status</Th>
+                    <Th right>Action</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -112,6 +132,20 @@ export default function LoanDetailPage() {
                       </td>
                       <td className="px-5 py-3 text-right">
                         <StatusBadge status={i.status} />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        {i.amount_paid < i.amount_due ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={requestStkPush.isPending}
+                            onClick={() => handleRequestPayment(i.id, i.amount_due - i.amount_paid)}
+                          >
+                            {requestStkPush.isPending ? "Sending…" : "Request STK"}
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
