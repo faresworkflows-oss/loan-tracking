@@ -1,7 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
-import { RequireAdmin, RequireBorrower } from "@/components/route-guards";
+import { RequireStaff, RequireSuperAdmin, RequireBorrower } from "@/components/route-guards";
 import { useRealtimeSync } from "@/lib/data";
 
 import OverviewPage from "./pages/Overview";
@@ -11,6 +11,8 @@ import BorrowersIndexPage from "./pages/BorrowersIndex";
 import BorrowerDetailPage from "./pages/BorrowerDetail";
 import PaymentsPage from "./pages/Payments";
 import NotificationsPage from "./pages/Notifications";
+import ActivityPage from "./pages/Activity";
+import StaffPage from "./pages/Staff";
 import LoginPage from "./pages/Login";
 import PortalIndexPage from "./pages/PortalIndex";
 import PortalStatementPage from "./pages/PortalStatement";
@@ -25,16 +27,18 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 
-        <Route path="/" element={<RequireAdmin><OverviewPage /></RequireAdmin>} />
-        <Route path="/loans" element={<RequireAdmin><LoansIndexPage /></RequireAdmin>} />
-        <Route path="/loans/:loanId" element={<RequireAdmin><LoanDetailPage /></RequireAdmin>} />
-        <Route path="/borrowers" element={<RequireAdmin><BorrowersIndexPage /></RequireAdmin>} />
+        <Route path="/" element={<RequireStaff><OverviewPage /></RequireStaff>} />
+        <Route path="/loans" element={<RequireStaff><LoansIndexPage /></RequireStaff>} />
+        <Route path="/loans/:loanId" element={<RequireStaff><LoanDetailPage /></RequireStaff>} />
+        <Route path="/borrowers" element={<RequireStaff><BorrowersIndexPage /></RequireStaff>} />
         <Route
           path="/borrowers/:borrowerId"
-          element={<RequireAdmin><BorrowerDetailPage /></RequireAdmin>}
+          element={<RequireStaff><BorrowerDetailPage /></RequireStaff>}
         />
-        <Route path="/payments" element={<RequireAdmin><PaymentsPage /></RequireAdmin>} />
-        <Route path="/notifications" element={<RequireAdmin><NotificationsPage /></RequireAdmin>} />
+        <Route path="/payments" element={<RequireStaff><PaymentsPage /></RequireStaff>} />
+        <Route path="/notifications" element={<RequireStaff><NotificationsPage /></RequireStaff>} />
+        <Route path="/activity" element={<RequireStaff><ActivityPage /></RequireStaff>} />
+        <Route path="/staff" element={<RequireSuperAdmin><StaffPage /></RequireSuperAdmin>} />
 
         <Route path="/portal" element={<RequireBorrower><PortalIndexPage /></RequireBorrower>} />
         <Route

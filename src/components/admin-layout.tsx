@@ -2,13 +2,15 @@ import { NavLink, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useAuth, signOut } from "@/lib/auth";
 
-const NAV = [
+const NAV: { to: string; label: string; end: boolean; superOnly?: boolean }[] = [
   { to: "/", label: "Overview", end: true },
   { to: "/loans", label: "Loans", end: false },
   { to: "/borrowers", label: "Borrowers", end: false },
   { to: "/payments", label: "M-Pesa Matching", end: false },
   { to: "/notifications", label: "SMS Log", end: false },
-] as const;
+  { to: "/activity", label: "Activity", end: false },
+  { to: "/staff", label: "Staff", end: false, superOnly: true },
+];
 
 export function Brand({ subtitle }: { subtitle?: string }) {
   return (
@@ -102,10 +104,12 @@ function navLinkClass(isActive: boolean, mobile = false) {
 }
 
 function AdminIdentity() {
-  const { session } = useAuth();
+  const { session, role, staff } = useAuth();
   const navigate = useNavigate();
   const email = session?.user.email ?? "";
-  const initials = email ? email.slice(0, 2).toUpperCase() : "—";
+  const displayName = staff?.full_name || email;
+  const initials = displayName ? displayName.slice(0, 2).toUpperCase() : "—";
+  const roleLabel = role === "super_admin" ? "Super admin" : "Employee";
 
   async function handleSignOut() {
     await signOut();
@@ -118,11 +122,12 @@ function AdminIdentity() {
         {initials}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm leading-none font-medium">{email || "Signed in"}</p>
+        <p className="truncate text-sm leading-none font-medium">{displayName || "Signed in"}</p>
+        <p className="text-muted-foreground mt-1 text-[11px]">{roleLabel}</p>
         <button
           type="button"
           onClick={handleSignOut}
-          className="text-muted-foreground hover:text-coral mt-1 text-[11px] underline-offset-2 hover:underline"
+          className="text-muted-foreground hover:text-coral text-[11px] underline-offset-2 hover:underline"
         >
           Sign out
         </button>
@@ -132,6 +137,9 @@ function AdminIdentity() {
 }
 
 export function AdminLayout({ children }: { children: ReactNode }) {
+  const { role } = useAuth();
+  const nav = NAV.filter((item) => !item.superOnly || role === "super_admin");
+
   return (
     <div className="bg-background text-foreground flex min-h-screen">
       <aside className="bg-sidebar hidden w-60 shrink-0 flex-col border-r p-5 md:flex">
@@ -139,7 +147,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <Brand subtitle="LENDING DESK" />
         </div>
         <nav className="space-y-1 text-sm">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -154,9 +162,11 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="mt-auto border-t pt-6">
-          <NavLink to="/portal" className="text-muted-foreground hover:text-foreground text-xs">
-            Switch to borrower portal →
-          </NavLink>
+          {role === "super_admin" ? (
+            <NavLink to="/portal" className="text-muted-foreground hover:text-foreground text-xs">
+              Switch to borrower portal →
+            </NavLink>
+          ) : null}
           <div className="mt-4">
             <AdminIdentity />
           </div>
@@ -165,7 +175,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
       <div className="min-w-0 flex-1">
         <nav className="flex gap-1 overflow-x-auto border-b px-4 py-3 md:hidden">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

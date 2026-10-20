@@ -23,6 +23,7 @@ export interface Borrower {
   phone: string;
   email: string | null;
   national_id: string | null;
+  officer_id: string | null;
 }
 
 export interface Installment {
@@ -131,13 +132,15 @@ function mapPayment(row: any): Payment {
 
 /* ── Borrowers ────────────────────────────────────────────────────────── */
 
+const BORROWER_SELECT = "id, full_name, phone, email, national_id, officer_id";
+
 export function useBorrowers() {
   return useQuery({
     queryKey: ["borrowers"],
     queryFn: async (): Promise<Borrower[]> => {
       const { data, error } = await supabase
         .from("borrowers")
-        .select("id, full_name, phone, email, national_id")
+        .select(BORROWER_SELECT)
         .order("full_name");
       if (error) throw error;
       return data;
@@ -152,7 +155,7 @@ export function useBorrower(id: string | undefined) {
     queryFn: async (): Promise<Borrower | null> => {
       const { data, error } = await supabase
         .from("borrowers")
-        .select("id, full_name, phone, email, national_id")
+        .select(BORROWER_SELECT)
         .eq("id", id)
         .maybeSingle();
       if (error) throw error;
@@ -170,7 +173,7 @@ export function useCurrentBorrower() {
     queryFn: async (): Promise<Borrower | null> => {
       const { data, error } = await supabase
         .from("borrowers")
-        .select("id, full_name, phone, email, national_id")
+        .select(BORROWER_SELECT)
         .eq("auth_user_id", session!.user.id)
         .maybeSingle();
       if (error) throw error;
@@ -193,6 +196,7 @@ export function useCreateBorrower() {
       phone: string;
       email: string;
       national_id?: string;
+      officer_id?: string;
     }): Promise<{ temp_password: string }> => {
       const { data, error } = await supabase.functions.invoke("create-borrower", {
         body: input,
@@ -455,7 +459,10 @@ export function usePortfolioSummary() {
 
   const outstanding = loans.reduce((s, l) => s + l.outstanding_balance, 0);
   const disbursed = loans.reduce((s, l) => s + l.principal, 0);
-  const collected = payments.reduce((s, p) => s + (p.match_status === "matched" ? p.amount : 0), 0);
+  const matchedThisMonth = payments.filter(
+    (p) => p.match_status === "matched" && isThisMonth(p.paid_at),
+  );
+  const collected = matchedThisMonth.reduce((s, p) => s + p.amount, 0);
   const overdueLoans = loans.filter((l) =>
     l.schedule.some((i) => i.status === "late" || i.status === "penalized"),
   ).length;
@@ -465,8 +472,169 @@ export function usePortfolioSummary() {
     summary: { outstanding, disbursed, collected, overdueLoans, loanCount: loans.length },
     recentPayments: [...payments].slice(0, 5),
     matchedCount: payments.filter((p) => p.match_status === "matched").length,
+    matchedThisMonthCount: matchedThisMonth.length,
     totalPaymentsCount: payments.length,
     loans,
+  };
+}
+
+/* ── Staff, performance and activity (super admin / employees) ─────── */
+
+export function isThisMonth(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
+export interface StaffMember {
+  id: string;
+  role: "super_admin" | "officer";
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  active: boolean;
+  created_at: string;
+}
+
+export function staffLabel(member: Pick<StaffMember, "full_name" | "email"> | undefined | null) {
+  return member?.full_name || member?.email || "Unknown";
+}
+
+export function staffNameById(staff: StaffMember[] | undefined, id: string | null) {
+  if (!id) return "Unassigned";
+  const member = staff?.find((m) => m.id === id);
+  return member ? staffLabel(member) : "Unknown";
+}
+
+/** Only the super admin can read the full staff list (RLS enforces it too). */
+export function useStaff() {
+  const { role } = useAuth();
+  return useQuery({
+    queryKey: ["staff"],
+    enabled: role === "super_admin",
+    queryFn: async (): Promise<StaffMember[]> => {
+      const { data, error } = await supabase
+        .from("admins")
+        .select("id, role, full_name, email, phone, active, created_at")
+        .order("created_at");
+      if (error) throw error;
+      return data as StaffMember[];
+    },
+  });
+}
+
+export type ManageStaffInput =
+  | { action: "create"; full_name: string; phone: string; email: string }
+  | { action: "deactivate"; staff_id: string; reassign_to?: string }
+  | { action: "reactivate"; staff_id: string }
+  | { action: "reassign"; to_officer_id: string; borrower_ids?: string[]; from_officer_id?: string };
+
+/** Creates, deactivates, reactivates employees and moves clients between them. */
+export function useManageStaff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: ManageStaffInput,
+    ): Promise<{ temp_password?: string; moved?: number }> => {
+      const { data, error } = await supabase.functions.invoke("manage-staff", { body: input });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+      queryClient.invalidateQueries({ queryKey: ["borrowers"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
+export interface ActivityEntry {
+  id: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** Super admin sees everyone's activity; employees see only their own (RLS). */
+export function useActivity(limit = 200) {
+  return useQuery({
+    queryKey: ["activity", limit],
+    queryFn: async (): Promise<ActivityEntry[]> => {
+      const { data, error } = await supabase
+        .from("activity_log")
+        .select("*, actor:admins(full_name, email)")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data as any[]).map((row) => ({
+        id: row.id,
+        actor_id: row.actor_id,
+        actor_name: row.actor ? staffLabel(row.actor) : null,
+        action: row.action,
+        entity_type: row.entity_type,
+        entity_id: row.entity_id,
+        details: row.details,
+        created_at: row.created_at,
+      }));
+    },
+  });
+}
+
+export interface OfficerPerformance extends StaffMember {
+  clients: number;
+  activeLoans: number;
+  outstanding: number;
+  collectedThisMonth: number;
+  overdueLoans: number;
+}
+
+/** Per-employee portfolio numbers, computed from what the super admin can see. */
+export function usePerformance() {
+  const staffQuery = useStaff();
+  const borrowersQuery = useBorrowers();
+  const loansQuery = useLoans();
+  const paymentsQuery = useAllPayments();
+
+  const borrowers = borrowersQuery.data ?? [];
+  const loans = loansQuery.data ?? [];
+  const payments = paymentsQuery.data ?? [];
+
+  const officerOfBorrower = new Map(borrowers.map((b) => [b.id, b.officer_id]));
+
+  const rows: OfficerPerformance[] = (staffQuery.data ?? []).map((member) => {
+    const theirLoans = loans.filter((l) => officerOfBorrower.get(l.borrower_id) === member.id);
+    return {
+      ...member,
+      clients: borrowers.filter((b) => b.officer_id === member.id).length,
+      activeLoans: theirLoans.filter((l) => l.status === "active").length,
+      outstanding: theirLoans.reduce((sum, l) => sum + l.outstanding_balance, 0),
+      collectedThisMonth: payments
+        .filter(
+          (p) =>
+            p.match_status === "matched" &&
+            isThisMonth(p.paid_at) &&
+            p.borrower_id &&
+            officerOfBorrower.get(p.borrower_id) === member.id,
+        )
+        .reduce((sum, p) => sum + p.amount, 0),
+      overdueLoans: theirLoans.filter((l) =>
+        l.schedule.some((i) => i.status === "late" || i.status === "penalized"),
+      ).length,
+    };
+  });
+
+  return {
+    isLoading:
+      staffQuery.isLoading ||
+      borrowersQuery.isLoading ||
+      loansQuery.isLoading ||
+      paymentsQuery.isLoading,
+    rows,
   };
 }
 

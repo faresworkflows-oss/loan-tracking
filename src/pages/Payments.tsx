@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/lib/auth";
 import { formatDateTime, formatKES, pad2 } from "@/lib/format";
 import {
   borrowerName,
@@ -120,6 +121,8 @@ export default function PaymentsPage() {
   const { data: payments, isLoading } = useAllPayments();
   const { data: borrowers } = useBorrowers();
   const [matching, setMatching] = useState<Payment | null>(null);
+  const { role } = useAuth();
+  const canMatch = role === "super_admin";
   const unmatched = (payments ?? []).filter((p) => p.match_status === "unmatched").length;
 
   return (
@@ -137,13 +140,13 @@ export default function PaymentsPage() {
                 <Th>Channel</Th>
                 <Th>Date</Th>
                 <Th right>Status</Th>
-                <Th right>Action</Th>
+                {canMatch ? <Th right>Action</Th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="text-muted-foreground px-5 py-8 text-center">
+                  <td colSpan={canMatch ? 8 : 7} className="text-muted-foreground px-5 py-8 text-center">
                     Loading…
                   </td>
                 </tr>
@@ -161,15 +164,17 @@ export default function PaymentsPage() {
                     <td className="px-5 py-3 text-right">
                       <StatusBadge status={p.match_status} />
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      {p.match_status === "unmatched" ? (
-                        <Button size="sm" variant="secondary" onClick={() => setMatching(p)}>
-                          Match
-                        </Button>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </td>
+                    {canMatch ? (
+                      <td className="px-5 py-3 text-right">
+                        {p.match_status === "unmatched" ? (
+                          <Button size="sm" variant="secondary" onClick={() => setMatching(p)}>
+                            Match
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}

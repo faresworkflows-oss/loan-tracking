@@ -24,7 +24,16 @@ import {
 } from "@/components/ui/select";
 import { formatKES } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
-import { borrowerName, loanOutstanding, useBorrowers, useCreateLoan, useLoans } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
+import {
+  borrowerName,
+  loanOutstanding,
+  staffNameById,
+  useBorrowers,
+  useCreateLoan,
+  useLoans,
+  useStaff,
+} from "@/lib/data";
 
 function CreateLoanDialog() {
   const [open, setOpen] = useState(false);
@@ -135,6 +144,9 @@ function CreateLoanDialog() {
 export default function LoansIndexPage() {
   const { data: loans, isLoading } = useLoans();
   const { data: borrowers } = useBorrowers();
+  const { role } = useAuth();
+  const { data: staff } = useStaff();
+  const showOfficer = role === "super_admin";
 
   return (
     <AdminLayout>
@@ -146,6 +158,7 @@ export default function LoansIndexPage() {
               <tr className="border-b">
                 <Th>Loan</Th>
                 <Th>Borrower</Th>
+                {showOfficer ? <Th>Assigned to</Th> : null}
                 <Th right>Principal</Th>
                 <Th right>Balance</Th>
                 <Th>Term</Th>
@@ -155,7 +168,7 @@ export default function LoansIndexPage() {
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="text-muted-foreground px-5 py-8 text-center">
+                  <td colSpan={showOfficer ? 7 : 6} className="text-muted-foreground px-5 py-8 text-center">
                     Loading…
                   </td>
                 </tr>
@@ -171,6 +184,14 @@ export default function LoansIndexPage() {
                       </Link>
                     </td>
                     <td className="px-5 py-3">{borrowerName(borrowers, l.borrower_id)}</td>
+                    {showOfficer ? (
+                      <td className="text-muted-foreground px-5 py-3">
+                        {staffNameById(
+                          staff,
+                          borrowers?.find((b) => b.id === l.borrower_id)?.officer_id ?? null,
+                        )}
+                      </td>
+                    ) : null}
                     <td className="px-5 py-3 text-right font-mono tabular-nums">
                       {formatKES(l.principal)}
                     </td>

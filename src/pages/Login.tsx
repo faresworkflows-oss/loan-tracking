@@ -26,13 +26,13 @@ export default function LoginPage() {
       return;
     }
 
-    const { data: adminRow } = await supabase
+    const { data: staffRow } = await supabase
       .from("admins")
-      .select("id")
+      .select("id, active")
       .eq("id", data.session.user.id)
       .maybeSingle();
 
-    navigate(adminRow ? "/" : "/portal", { replace: true });
+    navigate(staffRow?.active ? "/" : "/portal", { replace: true });
   }
 
   return (

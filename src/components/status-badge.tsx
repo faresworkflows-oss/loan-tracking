@@ -38,6 +38,7 @@ const TONES: Record<string, Tone> = {
   matched: "good",
   unmatched: "warn",
   active: "good",
+  inactive: "neutral",
   completed: "neutral",
   defaulted: "bad",
   closed: "neutral",

@@ -3,7 +3,15 @@ import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admi
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatKES, formatShortDate } from "@/lib/format";
-import { borrowerName, loanOutstanding, usePortfolioSummary, useBorrowers } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
+import {
+  borrowerName,
+  loanOutstanding,
+  staffLabel,
+  useBorrowers,
+  usePerformance,
+  usePortfolioSummary,
+} from "@/lib/data";
 
 function Kpi({
   label,
@@ -36,15 +44,80 @@ function Kpi({
   );
 }
 
+function TeamPerformancePanel() {
+  const { isLoading, rows } = usePerformance();
+  const active = rows.filter((r) => r.active);
+
+  return (
+    <Panel title="Team performance" meta={`${active.length} staff`}>
+      <TableWrap>
+        <thead>
+          <tr className="border-b">
+            <Th>Employee</Th>
+            <Th right>Clients</Th>
+            <Th right>Active loans</Th>
+            <Th right>Outstanding</Th>
+            <Th right>Collected (month)</Th>
+            <Th right>Overdue</Th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/5">
+          {isLoading ? (
+            <tr>
+              <td colSpan={6} className="text-muted-foreground px-5 py-8 text-center">
+                Loading…
+              </td>
+            </tr>
+          ) : (
+            active.map((m) => (
+              <tr key={m.id} className="ledger-row">
+                <td className="px-5 py-3">
+                  {staffLabel(m)}
+                  {m.role === "super_admin" ? (
+                    <span className="text-muted-foreground ml-2 text-xs">(you)</span>
+                  ) : null}
+                </td>
+                <td className="px-5 py-3 text-right font-mono tabular-nums">{m.clients}</td>
+                <td className="px-5 py-3 text-right font-mono tabular-nums">{m.activeLoans}</td>
+                <td className="px-5 py-3 text-right font-mono tabular-nums">
+                  {formatKES(m.outstanding)}
+                </td>
+                <td className="px-5 py-3 text-right font-mono tabular-nums">
+                  {formatKES(m.collectedThisMonth)}
+                </td>
+                <td
+                  className={`px-5 py-3 text-right font-mono tabular-nums ${
+                    m.overdueLoans > 0 ? "text-coral" : ""
+                  }`}
+                >
+                  {m.overdueLoans}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </TableWrap>
+    </Panel>
+  );
+}
+
 export default function OverviewPage() {
-  const { isLoading, summary, recentPayments, matchedCount, totalPaymentsCount, loans } =
-    usePortfolioSummary();
+  const {
+    isLoading,
+    summary,
+    recentPayments,
+    matchedCount,
+    matchedThisMonthCount,
+    totalPaymentsCount,
+    loans,
+  } = usePortfolioSummary();
+  const { role } = useAuth();
   const { data: borrowers } = useBorrowers();
 
   if (isLoading) {
     return (
       <AdminLayout>
-        <PageHeader eyebrow="Portfolio Overview" title="Outstanding book & collections" />
+        <PageHeader eyebrow={role === "super_admin" ? "Portfolio Overview" : "My portfolio"} title="Outstanding book & collections" />
         <div className="text-muted-foreground p-8 text-sm">Loading…</div>
       </AdminLayout>
     );
@@ -53,7 +126,7 @@ export default function OverviewPage() {
   return (
     <AdminLayout>
       <PageHeader
-        eyebrow="Portfolio Overview"
+        eyebrow={role === "super_admin" ? "Portfolio Overview" : "My portfolio"}
         title="Outstanding book & collections"
         action={
           <Button asChild>
@@ -78,7 +151,7 @@ export default function OverviewPage() {
           <Kpi
             label="Collections this month"
             value={formatKES(summary.collected)}
-            note={`${matchedCount} payments matched`}
+            note={`${matchedThisMonthCount} payments matched`}
             tone="teal"
           />
           <Kpi
@@ -88,6 +161,8 @@ export default function OverviewPage() {
             tone="coral"
           />
         </div>
+
+        {role === "super_admin" ? <TeamPerformancePanel /> : null}
 
         <Panel title="Recent M-Pesa payments" meta={`matched ${matchedCount} / ${totalPaymentsCount}`}>
           <TableWrap>
