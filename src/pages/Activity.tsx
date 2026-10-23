@@ -2,12 +2,14 @@ import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admi
 import { useAuth } from "@/lib/auth";
 import { formatDateTime, formatKES } from "@/lib/format";
 import {
+  channelLabel,
   staffNameById,
   useActivity,
   useBorrowers,
   useStaff,
   type ActivityEntry,
   type Borrower,
+  type PaymentChannel,
   type StaffMember,
 } from "@/lib/data";
 
@@ -16,6 +18,8 @@ const ACTION_LABELS: Record<string, string> = {
   loan_created: "Created a loan",
   stk_push_requested: "Requested an STK push",
   payment_matched: "Matched a payment",
+  payment_recorded: "Recorded a payment",
+  payment_voided: "Voided a payment",
   staff_created: "Added an employee",
   staff_deactivated: "Deactivated an employee",
   staff_reactivated: "Reactivated an employee",
@@ -40,6 +44,12 @@ function summarize(
       const name = borrowers?.find((b) => b.id === text(d["borrower_id"]))?.full_name ?? "a client";
       return `${formatKES(num(d["principal"]))} over ${num(d["term_months"])} mo for ${name}`;
     }
+    case "payment_recorded": {
+      const over = num(d["overpayment"]);
+      return `${channelLabel(text(d["method"]) as PaymentChannel)} ${formatKES(num(d["amount"]))} · ${text(d["receipt_no"])}${over > 0 ? ` · overpaid ${formatKES(over)}` : ""}`;
+    }
+    case "payment_voided":
+      return `${formatKES(num(d["amount"]))} · ${text(d["receipt_no"])} — ${text(d["reason"])}`;
     case "stk_push_requested":
     case "payment_matched":
       return formatKES(num(d["amount"]));

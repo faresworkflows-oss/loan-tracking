@@ -15,7 +15,13 @@ import { addMonths, quoteLoan } from "./loan-math";
 export type InstallmentStatus = "pending" | "paid" | "late" | "penalized";
 export type LoanStatus = "active" | "completed" | "defaulted";
 export type MatchStatus = "matched" | "unmatched";
-export type SmsType = "reminder" | "overdue" | "payment_received" | "account_created";
+export type SmsType =
+  | "reminder"
+  | "overdue"
+  | "payment_received"
+  | "account_created"
+  | "loan_cleared"
+  | "staff_alert";
 
 export interface Borrower {
   id: string;
@@ -47,18 +53,41 @@ export interface Loan {
   schedule: Installment[];
 }
 
+export type PaymentChannel =
+  | "stk_push"
+  | "c2b"
+  | "cash"
+  | "bank_transfer"
+  | "cheque"
+  | "mpesa_manual"
+  | "other";
+
 export interface Payment {
   id: string;
+  /** The M-Pesa transaction code, when there is one. */
   receipt: string | null;
+  /** Our own receipt number (RCT-00001) for payments recorded by hand. */
+  receipt_no: string | null;
+  /** Bank reference, cheque number, etc. */
+  reference: string | null;
   borrower_id: string | null;
   loan_id: string | null;
   installment_number: number | null;
   matched_installment_id: string | null;
   amount: number;
-  channel: "STK" | "C2B";
+  channel: PaymentChannel;
   phone: string | null;
   account_number_entered: string | null;
+  /** When the system recorded it. */
   paid_at: string;
+  /** The date the money was actually received (manual entries). */
+  received_on: string | null;
+  recorded_by: string | null;
+  recorded_by_name: string | null;
+  note: string | null;
+  overpayment: number;
+  voided_at: string | null;
+  void_reason: string | null;
   match_status: MatchStatus;
 }
 
@@ -84,8 +113,38 @@ function makeRef(id: string) {
   return `LN-${id.slice(0, 8).toUpperCase()}`;
 }
 
-function mapChannel(channel: string): "STK" | "C2B" {
-  return channel === "stk_push" ? "STK" : "C2B";
+export const CHANNEL_LABELS: Record<PaymentChannel, string> = {
+  stk_push: "M-Pesa STK",
+  c2b: "M-Pesa till",
+  mpesa_manual: "M-Pesa (manual)",
+  cash: "Cash",
+  bank_transfer: "Bank transfer",
+  cheque: "Cheque",
+  other: "Other",
+};
+
+export function channelLabel(channel: PaymentChannel) {
+  return CHANNEL_LABELS[channel] ?? channel;
+}
+
+/** Recorded by hand rather than received automatically from M-Pesa. */
+export function isManualChannel(channel: PaymentChannel) {
+  return channel !== "stk_push" && channel !== "c2b";
+}
+
+/** An STK push that was sent but never completed: no money was received. */
+export function isIncompleteStk(p: Payment) {
+  return p.channel === "stk_push" && !p.receipt && p.match_status === "unmatched" && !p.voided_at;
+}
+
+/** The reference to show for a payment: M-Pesa code, else our receipt number. */
+export function paymentRef(p: Payment) {
+  return p.receipt ?? p.receipt_no ?? p.reference ?? null;
+}
+
+/** The date the money arrived, falling back to when it was recorded. */
+export function paymentDate(p: Payment) {
+  return p.received_on ?? p.paid_at;
 }
 
 function mapLoan(row: any): Loan {
@@ -122,11 +181,20 @@ function mapPayment(row: any): Payment {
     installment_number: row.matched_installment?.installment_no ?? null,
     matched_installment_id: row.matched_installment_id,
     amount: Number(row.amount),
-    channel: mapChannel(row.channel),
+    channel: row.channel,
     phone: row.phone_number,
     account_number_entered: row.account_number_entered,
     paid_at: row.created_at,
     match_status: row.status,
+    receipt_no: row.receipt_no ?? null,
+    reference: row.reference ?? null,
+    received_on: row.received_on ?? null,
+    recorded_by: row.recorded_by ?? null,
+    recorded_by_name: row.recorder ? staffLabel(row.recorder) : null,
+    note: row.note ?? null,
+    overpayment: Number(row.overpayment ?? 0),
+    voided_at: row.voided_at ?? null,
+    void_reason: row.void_reason ?? null,
   };
 }
 
@@ -201,7 +269,7 @@ export function useCreateBorrower() {
       const { data, error } = await supabase.functions.invoke("create-borrower", {
         body: input,
       });
-      if (error) throw error;
+      if (error) throw await explainFunctionError(error);
       if (data?.error) throw new Error(data.error);
       return data;
     },
@@ -315,7 +383,8 @@ export function useCreateLoan() {
 
 /* ── Payments ─────────────────────────────────────────────────────────── */
 
-const PAYMENT_SELECT = "*, matched_installment:repayment_schedule(installment_no)";
+const PAYMENT_SELECT =
+  "*, matched_installment:repayment_schedule!matched_installment_id(installment_no), recorder:admins!recorded_by(full_name, email)";
 
 export function useAllPayments() {
   return useQuery({
@@ -378,7 +447,7 @@ export function useMatchPayment() {
       installmentId: string;
     }) => {
       const { data, error } = await supabase.functions.invoke("match-payment", { body: input });
-      if (error) throw error;
+      if (error) throw await explainFunctionError(error);
       if (data?.error) throw new Error(data.error);
       return data;
     },
@@ -399,11 +468,81 @@ export function useRequestStkPush() {
       amount: number;
     }) => {
       const { data, error } = await supabase.functions.invoke("mpesa-stk-push", { body: input });
-      if (error) throw error;
+      if (error) throw await explainFunctionError(error);
       if (data?.error) throw new Error(data.error);
       return data;
     },
   });
+}
+
+export interface RecordPaymentInput {
+  loanId: string;
+  method: Exclude<PaymentChannel, "stk_push" | "c2b">;
+  amount: number;
+  receivedOn: string;
+  reference?: string;
+  note?: string;
+}
+
+/** Records a payment made outside the automatic M-Pesa flow (cash, bank, cheque…). */
+export function useRecordPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      input: RecordPaymentInput,
+    ): Promise<{
+      receiptNo: string;
+      outstanding: number;
+      overpayment: number;
+      loanCleared: boolean;
+    }> => {
+      const { data, error } = await supabase.functions.invoke("record-payment", { body: input });
+      if (error) throw await explainFunctionError(error);
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["loans"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+/** Reverses a manually recorded payment (super admin only). */
+export function useVoidPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { paymentId: string; reason: string }) => {
+      const { data, error } = await supabase.functions.invoke("void-payment", { body: input });
+      if (error) throw await explainFunctionError(error);
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["loans"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
+  });
+}
+
+/**
+ * Edge functions answer 4xx errors with a JSON body that explains what went
+ * wrong, but supabase-js only exposes a generic message. Pull the real one out.
+ */
+async function explainFunctionError(error: unknown): Promise<Error> {
+  const context = (error as { context?: unknown }).context;
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json();
+      if (body?.error) return new Error(String(body.error));
+    } catch {
+      /* fall through to the generic message */
+    }
+  }
+  return error instanceof Error ? error : new Error("Request failed");
 }
 
 /* ── Penalties ────────────────────────────────────────────────────────── */
@@ -460,7 +599,7 @@ export function usePortfolioSummary() {
   const outstanding = loans.reduce((s, l) => s + l.outstanding_balance, 0);
   const disbursed = loans.reduce((s, l) => s + l.principal, 0);
   const matchedThisMonth = payments.filter(
-    (p) => p.match_status === "matched" && isThisMonth(p.paid_at),
+    (p) => p.match_status === "matched" && !p.voided_at && isThisMonth(paymentDate(p)),
   );
   const collected = matchedThisMonth.reduce((s, p) => s + p.amount, 0);
   const overdueLoans = loans.filter((l) =>
@@ -471,7 +610,7 @@ export function usePortfolioSummary() {
     isLoading: loansQuery.isLoading || paymentsQuery.isLoading,
     summary: { outstanding, disbursed, collected, overdueLoans, loanCount: loans.length },
     recentPayments: [...payments].slice(0, 5),
-    matchedCount: payments.filter((p) => p.match_status === "matched").length,
+    matchedCount: payments.filter((p) => p.match_status === "matched" && !p.voided_at).length,
     matchedThisMonthCount: matchedThisMonth.length,
     totalPaymentsCount: payments.length,
     loans,
@@ -537,7 +676,7 @@ export function useManageStaff() {
       input: ManageStaffInput,
     ): Promise<{ temp_password?: string; moved?: number }> => {
       const { data, error } = await supabase.functions.invoke("manage-staff", { body: input });
-      if (error) throw error;
+      if (error) throw await explainFunctionError(error);
       if (data?.error) throw new Error(data.error);
       return data;
     },
@@ -617,7 +756,8 @@ export function usePerformance() {
         .filter(
           (p) =>
             p.match_status === "matched" &&
-            isThisMonth(p.paid_at) &&
+            !p.voided_at &&
+            isThisMonth(paymentDate(p)) &&
             p.borrower_id &&
             officerOfBorrower.get(p.borrower_id) === member.id,
         )

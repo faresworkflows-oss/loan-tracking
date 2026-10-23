@@ -49,11 +49,16 @@ const TONES: Record<string, Tone> = {
   overdue: "warn",
   payment_received: "good",
   account_created: "good",
+  loan_cleared: "good",
+  staff_alert: "warn",
+  voided: "bad",
 };
 
 const LABELS: Record<string, string> = {
   payment_received: "Payment received",
   account_created: "Account created",
+  loan_cleared: "Loan cleared",
+  staff_alert: "Staff alert",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

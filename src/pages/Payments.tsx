@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
-import { StatusBadge } from "@/components/status-badge";
+import { PaymentStatusBadge, RecordedBy } from "@/components/payment-status";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,13 +21,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import { formatDateTime, formatKES, pad2 } from "@/lib/format";
+import { formatDate, formatKES, pad2 } from "@/lib/format";
 import {
   borrowerName,
+  channelLabel,
+  isIncompleteStk,
+  isManualChannel,
+  paymentDate,
+  paymentRef,
   useAllPayments,
   useBorrowers,
   useLoansForBorrower,
   useMatchPayment,
+  useVoidPayment,
   type Payment,
 } from "@/lib/data";
 
@@ -66,7 +73,7 @@ function MatchDialog({ payment, onClose }: { payment: Payment | null; onClose: (
         <DialogHeader>
           <DialogTitle className="font-display">Match payment</DialogTitle>
           <DialogDescription>
-            {payment ? `${payment.receipt ?? payment.id} · ${formatKES(payment.amount)} from ${payment.phone}` : ""}
+            {payment ? `${paymentRef(payment) ?? payment.id} · ${formatKES(payment.amount)} from ${payment.phone}` : ""}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -117,17 +124,70 @@ function MatchDialog({ payment, onClose }: { payment: Payment | null; onClose: (
   );
 }
 
+function VoidDialog({ payment, onClose }: { payment: Payment | null; onClose: () => void }) {
+  const [reason, setReason] = useState("");
+  const voidPayment = useVoidPayment();
+
+  async function confirm() {
+    if (!payment || !reason.trim()) return;
+    try {
+      await voidPayment.mutateAsync({ paymentId: payment.id, reason: reason.trim() });
+      toast.success("Payment voided", { description: "The loan balance has been recalculated." });
+      setReason("");
+      onClose();
+    } catch (err) {
+      toast.error("Could not void payment", { description: (err as Error).message });
+    }
+  }
+
+  return (
+    <Dialog open={!!payment} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="font-display">Void this payment?</DialogTitle>
+          <DialogDescription>
+            {payment
+              ? `${paymentRef(payment) ?? payment.id} · ${formatKES(payment.amount)}. The amount is taken off the borrower's installments and the loan balance is recalculated. This can't be undone, and the borrower isn't texted.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="void_reason">Reason (kept in the activity log)</Label>
+          <Input
+            id="void_reason"
+            placeholder="e.g. Wrong loan selected"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            variant="destructive"
+            onClick={confirm}
+            disabled={voidPayment.isPending || !reason.trim()}
+          >
+            {voidPayment.isPending ? "Voiding…" : "Void payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function PaymentsPage() {
   const { data: payments, isLoading } = useAllPayments();
   const { data: borrowers } = useBorrowers();
   const [matching, setMatching] = useState<Payment | null>(null);
+  const [voiding, setVoiding] = useState<Payment | null>(null);
   const { role } = useAuth();
-  const canMatch = role === "super_admin";
-  const unmatched = (payments ?? []).filter((p) => p.match_status === "unmatched").length;
+  const isSuperAdmin = role === "super_admin";
+  const unmatched = (payments ?? []).filter(
+    (p) => p.match_status === "unmatched" && !p.voided_at && !isIncompleteStk(p),
+  ).length;
 
   return (
     <AdminLayout>
-      <PageHeader eyebrow="Collections" title="M-Pesa payments" />
+      <PageHeader eyebrow="Collections" title="Payments" />
       <div className="p-6 md:p-8">
         <Panel title="All payments" meta={`${unmatched} unmatched`}>
           <TableWrap>
@@ -135,54 +195,101 @@ export default function PaymentsPage() {
               <tr className="border-b">
                 <Th>Receipt</Th>
                 <Th>Borrower</Th>
-                <Th>Phone</Th>
+                <Th>Method</Th>
                 <Th right>Amount</Th>
-                <Th>Channel</Th>
                 <Th>Date</Th>
+                <Th>Recorded by</Th>
                 <Th right>Status</Th>
-                {canMatch ? <Th right>Action</Th> : null}
+                {isSuperAdmin ? <Th right>Action</Th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr>
-                  <td colSpan={canMatch ? 8 : 7} className="text-muted-foreground px-5 py-8 text-center">
+                  <td
+                    colSpan={isSuperAdmin ? 8 : 7}
+                    className="text-muted-foreground px-5 py-8 text-center"
+                  >
                     Loading…
                   </td>
                 </tr>
+              ) : (payments ?? []).length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={isSuperAdmin ? 8 : 7}
+                    className="text-muted-foreground px-5 py-8 text-center"
+                  >
+                    No payments yet.
+                  </td>
+                </tr>
               ) : (
-                (payments ?? []).map((p) => (
-                  <tr key={p.id} className="ledger-row">
-                    <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt ?? "—"}</td>
-                    <td className="px-5 py-3">{borrowerName(borrowers, p.borrower_id)}</td>
-                    <td className="text-muted-foreground px-5 py-3 font-mono">{p.phone}</td>
-                    <td className="px-5 py-3 text-right font-mono tabular-nums">
-                      {formatKES(p.amount)}
-                    </td>
-                    <td className="text-muted-foreground px-5 py-3 font-mono text-xs">{p.channel}</td>
-                    <td className="text-muted-foreground px-5 py-3">{formatDateTime(p.paid_at)}</td>
-                    <td className="px-5 py-3 text-right">
-                      <StatusBadge status={p.match_status} />
-                    </td>
-                    {canMatch ? (
-                      <td className="px-5 py-3 text-right">
-                        {p.match_status === "unmatched" ? (
-                          <Button size="sm" variant="secondary" onClick={() => setMatching(p)}>
-                            Match
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
+                (payments ?? []).map((p) => {
+                  const canMatch =
+                    isSuperAdmin &&
+                    p.match_status === "unmatched" &&
+                    !p.voided_at &&
+                    !isIncompleteStk(p);
+                  const canVoid = isSuperAdmin && isManualChannel(p.channel) && !p.voided_at;
+                  return (
+                    <tr key={p.id} className={`ledger-row ${p.voided_at ? "opacity-60" : ""}`}>
+                      <td className="text-muted-foreground px-5 py-3 font-mono">
+                        {paymentRef(p) ?? "—"}
                       </td>
-                    ) : null}
-                  </tr>
-                ))
+                      <td className="px-5 py-3">{borrowerName(borrowers, p.borrower_id)}</td>
+                      <td className="px-5 py-3">
+                        <p className="text-xs">{channelLabel(p.channel)}</p>
+                        {p.reference && p.channel !== "mpesa_manual" ? (
+                          <p className="text-muted-foreground font-mono text-[11px]">
+                            {p.reference}
+                          </p>
+                        ) : null}
+                        {p.note ? (
+                          <p className="text-muted-foreground max-w-[220px] text-[11px]">
+                            {p.note}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono tabular-nums">
+                        {formatKES(p.amount)}
+                      </td>
+                      <td className="text-muted-foreground px-5 py-3 whitespace-nowrap">
+                        {formatDate(paymentDate(p))}
+                      </td>
+                      <td className="px-5 py-3">
+                        <RecordedBy p={p} />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <PaymentStatusBadge p={p} />
+                      </td>
+                      {isSuperAdmin ? (
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            {canMatch ? (
+                              <Button size="sm" variant="secondary" onClick={() => setMatching(p)}>
+                                Match
+                              </Button>
+                            ) : null}
+                            {canVoid ? (
+                              <Button size="sm" variant="secondary" onClick={() => setVoiding(p)}>
+                                Void
+                              </Button>
+                            ) : null}
+                            {!canMatch && !canVoid ? (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            ) : null}
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </TableWrap>
         </Panel>
       </div>
       <MatchDialog payment={matching} onClose={() => setMatching(null)} />
+      <VoidDialog payment={voiding} onClose={() => setVoiding(null)} />
     </AdminLayout>
   );
 }

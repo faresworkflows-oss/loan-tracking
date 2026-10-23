@@ -1,12 +1,18 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
+import { PaymentStatusBadge, RecordedBy } from "@/components/payment-status";
+import { RecordPaymentDialog } from "@/components/record-payment-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatDate, formatDateTime, formatKES, pad2 } from "@/lib/format";
+import { formatDate, formatKES, pad2 } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
 import {
+  channelLabel,
+  paymentDate,
+  paymentRef,
   useLoan,
   usePaymentsForLoan,
   usePenaltiesForLoan,
@@ -23,6 +29,7 @@ export default function LoanDetailPage() {
   const { data: loanPayments } = usePaymentsForLoan(loanId);
   const { data: loanPenalties } = usePenaltiesForLoan(loanId);
   const requestStkPush = useRequestStkPush();
+  const [recordOpen, setRecordOpen] = useState(false);
 
   async function handleRequestPayment(installmentId: string, amount: number) {
     if (!loan || !borrower) return;
@@ -65,13 +72,18 @@ export default function LoanDetailPage() {
         eyebrow="Loan detail"
         title={`${loan.ref} · ${borrower?.full_name ?? "…"}`}
         action={
-          <div className="text-right">
-            <p className="text-muted-foreground text-[11px] tracking-[0.15em] uppercase">
-              Outstanding
-            </p>
-            <p className="font-mono text-2xl font-bold tracking-tight tabular-nums">
-              {formatKES(loanOutstanding(loan))}
-            </p>
+          <div className="flex items-center gap-5">
+            {loan.status !== "completed" ? (
+              <Button onClick={() => setRecordOpen(true)}>Record payment</Button>
+            ) : null}
+            <div className="text-right">
+              <p className="text-muted-foreground text-[11px] tracking-[0.15em] uppercase">
+                Outstanding
+              </p>
+              <p className="font-mono text-2xl font-bold tracking-tight tabular-nums">
+                {formatKES(loanOutstanding(loan))}
+              </p>
+            </div>
           </div>
         }
       />
@@ -160,33 +172,48 @@ export default function LoanDetailPage() {
                 <thead>
                   <tr className="border-b">
                     <Th>Receipt</Th>
+                    <Th>Method</Th>
                     <Th>Installment</Th>
                     <Th right>Amount</Th>
-                    <Th>Channel</Th>
                     <Th>Date</Th>
+                    <Th>Recorded by</Th>
+                    <Th right>Status</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {payments.map((p) => (
-                    <tr key={p.id} className="ledger-row">
-                      <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt ?? "—"}</td>
+                    <tr key={p.id} className={`ledger-row ${p.voided_at ? "opacity-60" : ""}`}>
+                      <td className="text-muted-foreground px-5 py-3 font-mono">
+                        {paymentRef(p) ?? "—"}
+                      </td>
+                      <td className="px-5 py-3">
+                        <p className="text-xs">{channelLabel(p.channel)}</p>
+                        {p.reference && p.channel !== "mpesa_manual" ? (
+                          <p className="text-muted-foreground font-mono text-[11px]">
+                            {p.reference}
+                          </p>
+                        ) : null}
+                      </td>
                       <td className="px-5 py-3 font-mono">
                         {p.installment_number ? pad2(p.installment_number) : "—"}
                       </td>
                       <td className="px-5 py-3 text-right font-mono tabular-nums">
                         {formatKES(p.amount)}
                       </td>
-                      <td className="text-muted-foreground px-5 py-3 font-mono text-xs">
-                        {p.channel}
+                      <td className="text-muted-foreground px-5 py-3 whitespace-nowrap">
+                        {formatDate(paymentDate(p))}
                       </td>
-                      <td className="text-muted-foreground px-5 py-3">
-                        {formatDateTime(p.paid_at)}
+                      <td className="px-5 py-3">
+                        <RecordedBy p={p} />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <PaymentStatusBadge p={p} />
                       </td>
                     </tr>
                   ))}
                   {payments.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-muted-foreground px-5 py-8 text-center">
+                      <td colSpan={7} className="text-muted-foreground px-5 py-8 text-center">
                         No payments recorded yet.
                       </td>
                     </tr>
@@ -231,6 +258,7 @@ export default function LoanDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
+      <RecordPaymentDialog loan={loan} open={recordOpen} onOpenChange={setRecordOpen} />
     </AdminLayout>
   );
 }

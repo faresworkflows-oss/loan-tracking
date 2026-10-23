@@ -1,8 +1,12 @@
 import { Link, useParams } from "react-router-dom";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
+import { PaymentStatusBadge, RecordedBy } from "@/components/payment-status";
 import { StatusBadge } from "@/components/status-badge";
-import { formatDateTime, formatKES } from "@/lib/format";
+import { formatDate, formatKES } from "@/lib/format";
 import {
+  channelLabel,
+  paymentDate,
+  paymentRef,
   useBorrower,
   useLoansForBorrower,
   usePaymentsForBorrower,
@@ -116,20 +120,24 @@ export default function BorrowerDetailPage() {
                 <Th right>Amount</Th>
                 <Th>Channel</Th>
                 <Th>Date</Th>
+                <Th>Recorded by</Th>
                 <Th right>Status</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {payments.map((p) => (
                 <tr key={p.id} className="ledger-row">
-                  <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt ?? "—"}</td>
+                  <td className="text-muted-foreground px-5 py-3 font-mono">{paymentRef(p) ?? "—"}</td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums">
                     {formatKES(p.amount)}
                   </td>
-                  <td className="text-muted-foreground px-5 py-3 font-mono text-xs">{p.channel}</td>
-                  <td className="text-muted-foreground px-5 py-3">{formatDateTime(p.paid_at)}</td>
+                  <td className="text-muted-foreground px-5 py-3 font-mono text-xs">{channelLabel(p.channel)}</td>
+                  <td className="text-muted-foreground px-5 py-3">{formatDate(paymentDate(p))}</td>
+                  <td className="px-5 py-3">
+                    <RecordedBy p={p} />
+                  </td>
                   <td className="px-5 py-3 text-right">
-                    <StatusBadge status={p.match_status} />
+                    <PaymentStatusBadge p={p} />
                   </td>
                 </tr>
               ))}

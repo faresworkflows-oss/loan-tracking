@@ -2,7 +2,14 @@ import { PortalLayout } from "@/components/portal-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
 import { quoteLoan } from "@/lib/loan-math";
-import { useCurrentBorrower, useLoansForBorrower, usePaymentsForLoan } from "@/lib/data";
+import {
+  channelLabel,
+  paymentDate,
+  paymentRef,
+  useCurrentBorrower,
+  useLoansForBorrower,
+  usePaymentsForLoan,
+} from "@/lib/data";
 
 export default function PortalStatementPage() {
   const { data: borrower, isLoading: borrowerLoading } = useCurrentBorrower();
@@ -27,7 +34,8 @@ export default function PortalStatementPage() {
   }
 
   const quote = quoteLoan(loan.principal, loan.term_months);
-  const payments = loanPayments ?? [];
+  // Only payments that were actually applied; unfinished STK pushes are hidden.
+  const payments = (loanPayments ?? []).filter((p) => p.match_status === "matched");
 
   let running = quote.totalPayable;
   const rows = loan.schedule.map((i) => {
@@ -104,18 +112,26 @@ export default function PortalStatementPage() {
 
       <div className="bg-card mt-4 rounded-xl p-5 ring-1 ring-white/10">
         <p className="text-muted-foreground mb-3 text-[11px] tracking-[0.15em] uppercase">
-          M-Pesa receipts
+          Payments received
         </p>
         <div className="space-y-3">
           {payments.map((p) => (
-            <div key={p.id} className="flex items-center justify-between">
+            <div
+              key={p.id}
+              className={`flex items-center justify-between ${p.voided_at ? "opacity-50" : ""}`}
+            >
               <div>
-                <p className="font-mono text-sm leading-none">{p.receipt ?? "—"}</p>
+                <p className="font-mono text-sm leading-none">{paymentRef(p) ?? "—"}</p>
                 <p className="text-muted-foreground mt-1 text-[11px]">
-                  {formatDate(p.paid_at)} · {p.channel}
+                  {formatDate(paymentDate(p))} · {channelLabel(p.channel)}
+                  {p.voided_at ? " · reversed" : ""}
                 </p>
               </div>
-              <span className="text-teal font-mono text-sm tabular-nums">
+              <span
+                className={`font-mono text-sm tabular-nums ${
+                  p.voided_at ? "text-muted-foreground line-through" : "text-teal"
+                }`}
+              >
                 {formatKES(p.amount)}
               </span>
             </div>

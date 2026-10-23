@@ -1,12 +1,16 @@
 import { Link } from "react-router-dom";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
+import { PaymentStatusBadge } from "@/components/payment-status";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatKES, formatShortDate } from "@/lib/format";
 import { useAuth } from "@/lib/auth";
 import {
   borrowerName,
+  channelLabel,
   loanOutstanding,
+  paymentDate,
+  paymentRef,
   staffLabel,
   useBorrowers,
   usePerformance,
@@ -179,15 +183,15 @@ export default function OverviewPage() {
             <tbody className="divide-y divide-white/5">
               {recentPayments.map((p) => (
                 <tr key={p.id} className="ledger-row">
-                  <td className="text-muted-foreground px-5 py-3 font-mono">{p.receipt ?? "—"}</td>
+                  <td className="text-muted-foreground px-5 py-3 font-mono">{paymentRef(p) ?? "—"}</td>
                   <td className="px-5 py-3">{borrowerName(borrowers, p.borrower_id)}</td>
                   <td className="px-5 py-3 text-right font-mono tabular-nums">
                     {formatKES(p.amount)}
                   </td>
-                  <td className="text-muted-foreground px-5 py-3 font-mono text-xs">{p.channel}</td>
-                  <td className="text-muted-foreground px-5 py-3">{formatShortDate(p.paid_at)}</td>
+                  <td className="text-muted-foreground px-5 py-3 font-mono text-xs">{channelLabel(p.channel)}</td>
+                  <td className="text-muted-foreground px-5 py-3">{formatShortDate(paymentDate(p))}</td>
                   <td className="px-5 py-3 text-right">
-                    <StatusBadge status={p.match_status} />
+                    <PaymentStatusBadge p={p} />
                   </td>
                 </tr>
               ))}

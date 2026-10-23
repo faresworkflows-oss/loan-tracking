@@ -33,7 +33,11 @@ export default function NotificationsPage() {
                 (smsLog ?? []).map((s) => (
                   <tr key={s.id} className="ledger-row">
                     <td className="px-5 py-3 whitespace-nowrap">
-                      {borrowerName(borrowers, s.borrower_id)}
+                      {s.borrower_id
+                        ? borrowerName(borrowers, s.borrower_id)
+                        : s.type === "staff_alert"
+                          ? "Super admin"
+                          : "Staff"}
                     </td>
                     <td className="px-5 py-3">
                       <StatusBadge status={s.type} />
