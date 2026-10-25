@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
       borrowerId: borrower.id,
       phone,
       type: "account_created",
-      message: `Welcome to Mutiso's Lending. Log in at your portal with email ${email} and temporary password ${tempPassword}. Please change it after logging in.`,
+      message: `Welcome to 4us Lending. Log in at your portal with email ${email} and temporary password ${tempPassword}. Please change it after logging in.`,
     });
 
     return new Response(JSON.stringify({ borrower, temp_password: tempPassword }), {

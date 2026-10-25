@@ -52,7 +52,7 @@ export function PortalLayout({
 
         <footer className="mt-10 border-t pt-5">
           <p className="text-muted-foreground text-[11px] tracking-[0.25em] uppercase">
-            Mutiso's Lending · Nairobi
+            4us Lending · Nairobi
           </p>
         </footer>
       </div>
