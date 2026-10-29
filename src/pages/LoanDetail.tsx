@@ -8,9 +8,10 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
-import { quoteLoan } from "@/lib/loan-math";
 import {
   channelLabel,
+  installmentLabel,
+  loanRateSummary,
   paymentDate,
   paymentRef,
   useLoan,
@@ -62,7 +63,6 @@ export default function LoanDetailPage() {
     );
   }
 
-  const quote = quoteLoan(loan.principal, loan.term_months);
   const payments = loanPayments ?? [];
   const penalties = loanPenalties ?? [];
 
@@ -92,8 +92,8 @@ export default function LoanDetailPage() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
             { label: "Principal", value: formatKES(loan.principal) },
-            { label: "Monthly installment", value: formatKES(quote.monthlyInstallment) },
-            { label: "Total payable", value: formatKES(quote.totalPayable) },
+            { label: installmentLabel(loan), value: formatKES(loan.installment_amount) },
+            { label: "Total payable", value: formatKES(loan.total_payable) },
             { label: "Paid to date", value: formatKES(loanPaid(loan)) },
           ].map((item) => (
             <div key={item.label} className="bg-card rounded-xl p-5 ring-1 ring-white/10">
@@ -115,7 +115,7 @@ export default function LoanDetailPage() {
           </TabsList>
 
           <TabsContent value="schedule" className="mt-6">
-            <Panel title="Repayment schedule" meta={`${loan.term_months} installments · 10% flat p.a.`}>
+            <Panel title="Repayment schedule" meta={`${loan.schedule.length} installments · ${loanRateSummary(loan)}`}>
               <TableWrap>
                 <thead>
                   <tr className="border-b">

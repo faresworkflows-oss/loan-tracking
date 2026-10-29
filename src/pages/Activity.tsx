@@ -42,7 +42,11 @@ function summarize(
     }
     case "loan_created": {
       const name = borrowers?.find((b) => b.id === text(d["borrower_id"]))?.full_name ?? "a client";
-      return `${formatKES(num(d["principal"]))} over ${num(d["term_months"])} mo for ${name}`;
+      const weeks = num(d["term_weeks"]);
+      const length = weeks > 0
+        ? `${weeks} wk, paid ${text(d["frequency"]) === "biweekly" ? "every 2 weeks" : text(d["frequency"]) || "weekly"}`
+        : `${num(d["term_months"])} mo`;
+      return `${formatKES(num(d["principal"]))} over ${length} for ${name}`;
     }
     case "payment_recorded": {
       const over = num(d["overpayment"]);

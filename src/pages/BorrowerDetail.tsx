@@ -11,6 +11,7 @@ import {
   useLoansForBorrower,
   usePaymentsForBorrower,
   loanOutstanding,
+  loanTermLabel,
 } from "@/lib/data";
 
 export default function BorrowerDetailPage() {
@@ -102,7 +103,7 @@ export default function BorrowerDetailPage() {
                   <td className="px-5 py-3 text-right font-mono tabular-nums">
                     {formatKES(loanOutstanding(l))}
                   </td>
-                  <td className="text-muted-foreground px-5 py-3">{l.term_months} mo</td>
+                  <td className="text-muted-foreground px-5 py-3">{loanTermLabel(l)}</td>
                   <td className="px-5 py-3 text-right">
                     <StatusBadge status={l.status} />
                   </td>

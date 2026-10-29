@@ -1,8 +1,14 @@
 import { Link } from "react-router-dom";
 import { PortalLayout } from "@/components/portal-layout";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
-import { quoteLoan } from "@/lib/loan-math";
-import { useCurrentBorrower, useLoansForBorrower, loanOutstanding, nextInstallment } from "@/lib/data";
+import {
+  useCurrentBorrower,
+  useLoansForBorrower,
+  loanOutstanding,
+  loanRateSummary,
+  loanTermLong,
+  nextInstallment,
+} from "@/lib/data";
 
 export default function PortalIndexPage() {
   const { data: borrower, isLoading: borrowerLoading } = useCurrentBorrower();
@@ -38,7 +44,6 @@ export default function PortalIndexPage() {
 
   const outstanding = loanOutstanding(loan);
   const next = nextInstallment(loan);
-  const quote = quoteLoan(loan.principal, loan.term_months);
   const paidCount = loan.schedule.filter((i) => i.amount_paid >= i.amount_due).length;
 
   return (
@@ -77,27 +82,27 @@ export default function PortalIndexPage() {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Interest rate</span>
-            <span className="font-mono tabular-nums">10% flat p.a.</span>
+            <span className="text-right font-mono tabular-nums">{loanRateSummary(loan)}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Term</span>
-            <span className="font-mono tabular-nums">{loan.term_months} months</span>
+            <span className="text-right font-mono tabular-nums">{loanTermLong(loan)}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Total payable</span>
-            <span className="font-mono tabular-nums">{formatKES(quote.totalPayable)}</span>
+            <span className="font-mono tabular-nums">{formatKES(loan.total_payable)}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Progress</span>
             <span className="font-mono tabular-nums">
-              {paidCount} / {loan.term_months} paid
+              {paidCount} / {loan.schedule.length} paid
             </span>
           </div>
         </div>
         <div className="bg-muted mt-4 h-1.5 overflow-hidden rounded-full">
           <div
             className="bg-teal h-full rounded-full"
-            style={{ width: `${(paidCount / loan.term_months) * 100}%` }}
+            style={{ width: `${loan.schedule.length ? (paidCount / loan.schedule.length) * 100 : 0}%` }}
           />
         </div>
       </div>

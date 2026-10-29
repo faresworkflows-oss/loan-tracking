@@ -1,9 +1,10 @@
 import { PortalLayout } from "@/components/portal-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
-import { quoteLoan } from "@/lib/loan-math";
 import {
   channelLabel,
+  loanRateSummary,
+  loanTotalInterest,
   paymentDate,
   paymentRef,
   useCurrentBorrower,
@@ -33,11 +34,10 @@ export default function PortalStatementPage() {
     );
   }
 
-  const quote = quoteLoan(loan.principal, loan.term_months);
   // Only payments that were actually applied; unfinished STK pushes are hidden.
   const payments = (loanPayments ?? []).filter((p) => p.match_status === "matched");
 
-  let running = quote.totalPayable;
+  let running = loan.total_payable;
   const rows = loan.schedule.map((i) => {
     running -= i.amount_paid;
     return { ...i, balance: running };
@@ -59,16 +59,16 @@ export default function PortalStatementPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">
-              Interest (10% flat × {loan.term_months} mo)
+              Interest ({loanRateSummary(loan)})
             </span>
             <span className="text-gold font-mono tabular-nums">
-              {formatKES(quote.totalInterest)}
+              {formatKES(loanTotalInterest(loan))}
             </span>
           </div>
           <div className="flex justify-between border-t pt-3">
             <span className="font-medium">Total payable</span>
             <span className="font-mono font-bold tabular-nums">
-              {formatKES(quote.totalPayable)}
+              {formatKES(loan.total_payable)}
             </span>
           </div>
         </div>

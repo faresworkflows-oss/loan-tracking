@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tansta
 import { useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./auth";
-import { addMonths, quoteLoan } from "./loan-math";
+import { frequencyInfo, type RepaymentFrequency } from "./loan-math";
 
 export type InstallmentStatus = "pending" | "paid" | "late" | "penalized";
 export type LoanStatus = "active" | "completed" | "defaulted";
@@ -46,7 +46,16 @@ export interface Loan {
   ref: string;
   borrower_id: string;
   principal: number;
-  term_months: number;
+  /** Older loans are measured in months; newer ones in weeks. */
+  term_months: number | null;
+  term_weeks: number | null;
+  repayment_frequency: RepaymentFrequency;
+  /** Percent of principal per rate_period (per year for older loans, per week for newer). */
+  interest_rate: number;
+  rate_period: "year" | "week";
+  total_payable: number;
+  /** The regular installment (the last one can differ by a few shillings). */
+  installment_amount: number;
   start_date: string;
   status: LoanStatus;
   outstanding_balance: number;
@@ -164,7 +173,13 @@ function mapLoan(row: any): Loan {
     ref: makeRef(row.id),
     borrower_id: row.borrower_id,
     principal: Number(row.principal),
-    term_months: row.term_months,
+    term_months: row.term_months ?? null,
+    term_weeks: row.term_weeks ?? null,
+    repayment_frequency: (row.repayment_frequency ?? "monthly") as RepaymentFrequency,
+    interest_rate: Number(row.interest_rate),
+    rate_period: (row.rate_period ?? "year") as "year" | "week",
+    total_payable: Number(row.total_payable),
+    installment_amount: Number(row.monthly_installment),
     start_date: row.start_date,
     status: row.status,
     outstanding_balance: Number(row.outstanding_balance),
@@ -327,57 +342,37 @@ export function useLoansForBorrower(borrowerId: string | undefined) {
   });
 }
 
-/** Creates a loan and generates its flat-rate repayment schedule. */
+/**
+ * Creates a loan through the create-loan function. The server works out the
+ * interest and schedule (5% a week, flat), so the numbers can't be changed
+ * from the browser.
+ */
 export function useCreateLoan() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
-      borrower_id: string;
+      borrowerId: string;
       principal: number;
-      term_months: number;
-      start_date: string;
-    }) => {
-      const quote = quoteLoan(input.principal, input.term_months);
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      const { data: loan, error: loanError } = await supabase
-        .from("loans")
-        .insert({
-          borrower_id: input.borrower_id,
-          principal: input.principal,
-          interest_rate: 10.0,
-          term_months: input.term_months,
-          monthly_installment: quote.monthlyInstallment,
-          total_payable: quote.totalPayable,
-          start_date: input.start_date,
-          status: "active",
-          outstanding_balance: quote.totalPayable,
-          created_by: user?.id,
-        })
-        .select()
-        .single();
-      if (loanError) throw loanError;
-
-      const principalPerInstallment = input.principal / input.term_months;
-      const interestPerInstallment = quote.totalInterest / input.term_months;
-      const schedule = Array.from({ length: input.term_months }, (_, i) => ({
-        loan_id: loan.id,
-        installment_no: i + 1,
-        due_date: addMonths(input.start_date, i + 1),
-        principal_due: principalPerInstallment,
-        interest_due: interestPerInstallment,
-        amount_due: quote.monthlyInstallment,
-        amount_paid: 0,
-        status: "pending" as const,
-      }));
-      const { error: scheduleError } = await supabase.from("repayment_schedule").insert(schedule);
-      if (scheduleError) throw scheduleError;
-
-      return loan;
+      termWeeks: number;
+      frequency: RepaymentFrequency;
+      startDate: string;
+    }): Promise<{
+      loanId: string;
+      totalInterest: number;
+      totalPayable: number;
+      installments: number;
+      installmentAmount: number;
+      lastInstallmentAmount: number;
+    }> => {
+      const { data, error } = await supabase.functions.invoke("create-loan", { body: input });
+      if (error) throw await explainFunctionError(error);
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["loans"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["loans"] });
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+    },
   });
 }
 
@@ -779,6 +774,42 @@ export function usePerformance() {
 }
 
 /* ── Shared helpers ──────────────────────────────────────────────────── */
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** "8 wk · weekly" for newer loans, "12 mo" for older monthly ones. */
+export function loanTermLabel(loan: Loan) {
+  if (loan.term_weeks) {
+    return `${loan.term_weeks} wk · ${frequencyInfo(loan.repayment_frequency).short}`;
+  }
+  return `${loan.term_months ?? loan.schedule.length} mo`;
+}
+
+/** Plain English for borrowers: "8 weeks, paid weekly" or "12 months". */
+export function loanTermLong(loan: Loan) {
+  if (loan.term_weeks) {
+    return `${plural(loan.term_weeks, "week")}, paid ${frequencyInfo(loan.repayment_frequency).short}`;
+  }
+  return plural(loan.term_months ?? loan.schedule.length, "month");
+}
+
+/** "5% per week × 8 weeks = 40%" for newer loans, "10% flat p.a." for older ones. */
+export function loanRateSummary(loan: Loan) {
+  if (loan.rate_period === "week" && loan.term_weeks) {
+    return `${loan.interest_rate}% per week × ${plural(loan.term_weeks, "week")} = ${
+      loan.interest_rate * loan.term_weeks
+    }%`;
+  }
+  return `${loan.interest_rate}% flat p.a.`;
+}
+
+export function loanTotalInterest(loan: Loan) {
+  return Math.max(loan.total_payable - loan.principal, 0);
+}
+
+export function installmentLabel(loan: Loan) {
+  return `Installment (${frequencyInfo(loan.repayment_frequency).short})`;
+}
 
 export function loanOutstanding(loan: Loan) {
   return loan.outstanding_balance;
