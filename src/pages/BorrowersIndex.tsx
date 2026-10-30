@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ResetPasswordDialog, type ResetTarget } from "@/components/reset-password-dialog";
 import { useAuth } from "@/lib/auth";
 import { formatKES } from "@/lib/format";
 import {
@@ -203,10 +204,12 @@ function BorrowerRow({
   borrower,
   staff,
   showOwner,
+  onReset,
 }: {
   borrower: Borrower;
   staff: StaffMember[];
   showOwner: boolean;
+  onReset: () => void;
 }) {
   const { id, full_name, phone, national_id } = borrower;
   const { data: theirLoans } = useLoansForBorrower(id);
@@ -230,6 +233,13 @@ function BorrowerRow({
       ) : null}
       <td className="px-5 py-3 text-right font-mono tabular-nums">{active}</td>
       <td className="px-5 py-3 text-right font-mono tabular-nums">{formatKES(owed)}</td>
+      {showOwner ? (
+        <td className="px-5 py-3 text-right">
+          <Button size="sm" variant="secondary" onClick={onReset}>
+            Reset password
+          </Button>
+        </td>
+      ) : null}
     </tr>
   );
 }
@@ -239,6 +249,7 @@ export default function BorrowersIndexPage() {
   const { role } = useAuth();
   const { data: staff } = useStaff();
   const showOwner = role === "super_admin";
+  const [resetting, setResetting] = useState<ResetTarget | null>(null);
 
   return (
     <AdminLayout>
@@ -254,24 +265,32 @@ export default function BorrowersIndexPage() {
                 {showOwner ? <Th>Assigned to</Th> : null}
                 <Th right>Active loans</Th>
                 <Th right>Total owed</Th>
+                {showOwner ? <Th right>Actions</Th> : null}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr>
-                  <td colSpan={showOwner ? 6 : 5} className="text-muted-foreground px-5 py-8 text-center">
+                  <td colSpan={showOwner ? 7 : 5} className="text-muted-foreground px-5 py-8 text-center">
                     Loading…
                   </td>
                 </tr>
               ) : (
                 (borrowers ?? []).map((b) => (
-                  <BorrowerRow key={b.id} borrower={b} staff={staff ?? []} showOwner={showOwner} />
+                  <BorrowerRow
+                    key={b.id}
+                    borrower={b}
+                    staff={staff ?? []}
+                    showOwner={showOwner}
+                    onReset={() => setResetting({ kind: "borrower", id: b.id, name: b.full_name })}
+                  />
                 ))
               )}
             </tbody>
           </TableWrap>
         </Panel>
       </div>
+      <ResetPasswordDialog target={resetting} onClose={() => setResetting(null)} />
     </AdminLayout>
   );
 }

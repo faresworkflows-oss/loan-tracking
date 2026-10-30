@@ -60,6 +60,9 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+        <p className="text-muted-foreground mt-4 text-xs">
+          Forgot your password? Ask your lending desk to reset it for you.
+        </p>
       </div>
     </div>
   );

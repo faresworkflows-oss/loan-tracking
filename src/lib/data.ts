@@ -21,7 +21,8 @@ export type SmsType =
   | "payment_received"
   | "account_created"
   | "loan_cleared"
-  | "staff_alert";
+  | "staff_alert"
+  | "password_reset";
 
 export interface Borrower {
   id: string;
@@ -538,6 +539,26 @@ async function explainFunctionError(error: unknown): Promise<Error> {
     }
   }
   return error instanceof Error ? error : new Error("Request failed");
+}
+
+/** Super admin only: gives a borrower or employee a new temporary password and texts it to them. */
+export function useResetPassword() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      kind: "borrower" | "staff";
+      id: string;
+    }): Promise<{ temp_password: string; sms_sent: boolean }> => {
+      const { data, error } = await supabase.functions.invoke("reset-password", { body: input });
+      if (error) throw await explainFunctionError(error);
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activity"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
 }
 
 /* ── Penalties ────────────────────────────────────────────────────────── */

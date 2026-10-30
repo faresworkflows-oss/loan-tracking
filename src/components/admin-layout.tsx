@@ -124,13 +124,21 @@ function AdminIdentity() {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm leading-none font-medium">{displayName || "Signed in"}</p>
         <p className="text-muted-foreground mt-1 text-[11px]">{roleLabel}</p>
-        <button
-          type="button"
-          onClick={handleSignOut}
-          className="text-muted-foreground hover:text-coral text-[11px] underline-offset-2 hover:underline"
-        >
-          Sign out
-        </button>
+        <div className="flex gap-3">
+          <NavLink
+            to="/account"
+            className="text-muted-foreground hover:text-foreground text-[11px] underline-offset-2 hover:underline"
+          >
+            Password
+          </NavLink>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="text-muted-foreground hover:text-coral text-[11px] underline-offset-2 hover:underline"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </div>
   );

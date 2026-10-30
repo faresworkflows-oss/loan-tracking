@@ -51,6 +51,7 @@ const TONES: Record<string, Tone> = {
   account_created: "good",
   loan_cleared: "good",
   staff_alert: "warn",
+  password_reset: "neutral",
   voided: "bad",
 };
 
@@ -59,6 +60,7 @@ const LABELS: Record<string, string> = {
   account_created: "Account created",
   loan_cleared: "Loan cleared",
   staff_alert: "Staff alert",
+  password_reset: "Password reset",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

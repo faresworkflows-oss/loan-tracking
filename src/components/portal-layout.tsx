@@ -29,6 +29,12 @@ export function PortalLayout({
           <Brand />
           <div className="text-right">
             <span className="text-muted-foreground font-mono text-[11px]">{borrowerName}</span>
+            <NavLink
+              to="/account"
+              className="text-muted-foreground hover:text-teal block text-[11px] underline-offset-2 hover:underline"
+            >
+              Change password
+            </NavLink>
             <button
               type="button"
               onClick={handleSignOut}

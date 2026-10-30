@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ResetPasswordDialog, type ResetTarget } from "@/components/reset-password-dialog";
 import { useAuth } from "@/lib/auth";
 import { formatKES } from "@/lib/format";
 import { staffLabel, useManageStaff, usePerformance, type OfficerPerformance } from "@/lib/data";
@@ -268,6 +269,7 @@ export default function StaffPage() {
   const manageStaff = useManageStaff();
   const [deactivating, setDeactivating] = useState<OfficerPerformance | null>(null);
   const [reassigning, setReassigning] = useState<OfficerPerformance | null>(null);
+  const [resetting, setResetting] = useState<ResetTarget | null>(null);
 
   const activeStaff = rows.filter((r) => r.active);
   const othersFor = (member: OfficerPerformance | null) =>
@@ -343,10 +345,21 @@ export default function StaffPage() {
                       <StatusBadge status={m.active ? "active" : "inactive"} />
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         {m.active && m.clients > 0 && othersFor(m).length > 0 ? (
                           <Button size="sm" variant="secondary" onClick={() => setReassigning(m)}>
                             Move clients
+                          </Button>
+                        ) : null}
+                        {m.active && m.role !== "super_admin" ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              setResetting({ kind: "staff", id: m.id, name: staffLabel(m) })
+                            }
+                          >
+                            Reset password
                           </Button>
                         ) : null}
                         {m.active && m.role !== "super_admin" ? (
@@ -379,6 +392,7 @@ export default function StaffPage() {
         others={othersFor(deactivating)}
         onClose={() => setDeactivating(null)}
       />
+      <ResetPasswordDialog target={resetting} onClose={() => setResetting(null)} />
       <ReassignDialog
         member={reassigning}
         others={othersFor(reassigning)}

@@ -24,6 +24,7 @@ const ACTION_LABELS: Record<string, string> = {
   staff_deactivated: "Deactivated an employee",
   staff_reactivated: "Reactivated an employee",
   clients_reassigned: "Moved clients",
+  password_reset: "Reset a password",
 };
 
 const text = (v: unknown) => (typeof v === "string" ? v : "");
@@ -57,6 +58,8 @@ function summarize(
     case "stk_push_requested":
     case "payment_matched":
       return formatKES(num(d["amount"]));
+    case "password_reset":
+      return `${text(d["name"])} (${text(d["kind"]) === "staff" ? "employee" : "borrower"})`;
     case "staff_created":
     case "staff_deactivated":
       return text(d["full_name"]);

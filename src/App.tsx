@@ -13,6 +13,7 @@ import PaymentsPage from "./pages/Payments";
 import NotificationsPage from "./pages/Notifications";
 import ActivityPage from "./pages/Activity";
 import StaffPage from "./pages/Staff";
+import AccountPage from "./pages/Account";
 import LoginPage from "./pages/Login";
 import PortalIndexPage from "./pages/PortalIndex";
 import PortalStatementPage from "./pages/PortalStatement";
@@ -39,6 +40,8 @@ export default function App() {
         <Route path="/notifications" element={<RequireStaff><NotificationsPage /></RequireStaff>} />
         <Route path="/activity" element={<RequireStaff><ActivityPage /></RequireStaff>} />
         <Route path="/staff" element={<RequireSuperAdmin><StaffPage /></RequireSuperAdmin>} />
+
+        <Route path="/account" element={<RequireBorrower><AccountPage /></RequireBorrower>} />
 
         <Route path="/portal" element={<RequireBorrower><PortalIndexPage /></RequireBorrower>} />
         <Route
