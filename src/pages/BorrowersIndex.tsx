@@ -253,11 +253,7 @@ export default function BorrowersIndexPage() {
 
   return (
     <AdminLayout>
-      <PageHeader
-        eyebrow="Book"
-        title="Borrowers"
-        action={showOwner ? <AddBorrowerDialog /> : undefined}
-      />
+      <PageHeader eyebrow="Book" title="Borrowers" action={<AddBorrowerDialog />} />
       <div className="p-6 md:p-8">
         <Panel title="All borrowers" meta={`${borrowers?.length ?? 0} records`}>
           <TableWrap>
