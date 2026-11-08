@@ -8,7 +8,7 @@ const NAV: { to: string; label: string; end: boolean; superOnly?: boolean }[] = 
   { to: "/borrowers", label: "Borrowers", end: false },
   { to: "/payments", label: "Payments", end: false },
   { to: "/notifications", label: "SMS Log", end: false },
-  { to: "/activity", label: "Activity", end: false },
+  { to: "/activity", label: "Activity", end: false, superOnly: true },
   { to: "/staff", label: "Staff", end: false, superOnly: true },
 ];
 

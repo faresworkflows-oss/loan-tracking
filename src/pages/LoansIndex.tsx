@@ -248,7 +248,11 @@ export default function LoansIndexPage() {
 
   return (
     <AdminLayout>
-      <PageHeader eyebrow="Book" title="Loans" action={<CreateLoanDialog />} />
+      <PageHeader
+        eyebrow="Book"
+        title="Loans"
+        action={showOfficer ? <CreateLoanDialog /> : undefined}
+      />
       <div className="p-6 md:p-8">
         <Panel title="All loans" meta={`${loans?.length ?? 0} total`}>
           <TableWrap>

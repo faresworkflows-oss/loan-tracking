@@ -38,7 +38,7 @@ export default function App() {
         />
         <Route path="/payments" element={<RequireStaff><PaymentsPage /></RequireStaff>} />
         <Route path="/notifications" element={<RequireStaff><NotificationsPage /></RequireStaff>} />
-        <Route path="/activity" element={<RequireStaff><ActivityPage /></RequireStaff>} />
+        <Route path="/activity" element={<RequireSuperAdmin><ActivityPage /></RequireSuperAdmin>} />
         <Route path="/staff" element={<RequireSuperAdmin><StaffPage /></RequireSuperAdmin>} />
 
         <Route path="/account" element={<RequireBorrower><AccountPage /></RequireBorrower>} />

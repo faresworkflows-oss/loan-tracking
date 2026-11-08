@@ -7,6 +7,7 @@ import { RecordPaymentDialog } from "@/components/record-payment-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/lib/auth";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
 import {
   channelLabel,
@@ -31,6 +32,8 @@ export default function LoanDetailPage() {
   const { data: loanPenalties } = usePenaltiesForLoan(loanId);
   const requestStkPush = useRequestStkPush();
   const [recordOpen, setRecordOpen] = useState(false);
+  // Only the super admin handles money; employees can only look.
+  const isSuperAdmin = useAuth().role === "super_admin";
 
   async function handleRequestPayment(installmentId: string, amount: number) {
     if (!loan || !borrower) return;
@@ -73,7 +76,7 @@ export default function LoanDetailPage() {
         title={`${loan.ref} · ${borrower?.full_name ?? "…"}`}
         action={
           <div className="flex items-center gap-5">
-            {loan.status !== "completed" ? (
+            {isSuperAdmin && loan.status !== "completed" ? (
               <Button onClick={() => setRecordOpen(true)}>Record payment</Button>
             ) : null}
             <div className="text-right">
@@ -124,7 +127,7 @@ export default function LoanDetailPage() {
                     <Th right>Amount due</Th>
                     <Th right>Amount paid</Th>
                     <Th right>Status</Th>
-                    <Th right>Action</Th>
+                    {isSuperAdmin ? <Th right>Action</Th> : null}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -145,20 +148,22 @@ export default function LoanDetailPage() {
                       <td className="px-5 py-3 text-right">
                         <StatusBadge status={i.status} />
                       </td>
-                      <td className="px-5 py-3 text-right">
-                        {i.amount_paid < i.amount_due ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            disabled={requestStkPush.isPending}
-                            onClick={() => handleRequestPayment(i.id, i.amount_due - i.amount_paid)}
-                          >
-                            {requestStkPush.isPending ? "Sending…" : "Request STK"}
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </td>
+                      {isSuperAdmin ? (
+                        <td className="px-5 py-3 text-right">
+                          {i.amount_paid < i.amount_due ? (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={requestStkPush.isPending}
+                              onClick={() => handleRequestPayment(i.id, i.amount_due - i.amount_paid)}
+                            >
+                              {requestStkPush.isPending ? "Sending…" : "Request STK"}
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -258,7 +263,9 @@ export default function LoanDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
-      <RecordPaymentDialog loan={loan} open={recordOpen} onOpenChange={setRecordOpen} />
+      {isSuperAdmin ? (
+        <RecordPaymentDialog loan={loan} open={recordOpen} onOpenChange={setRecordOpen} />
+      ) : null}
     </AdminLayout>
   );
 }

@@ -134,9 +134,11 @@ export default function OverviewPage() {
         eyebrow={role === "super_admin" ? "Portfolio Overview" : "My portfolio"}
         title="Outstanding book & collections"
         action={
-          <Button asChild>
-            <Link to="/loans">New loan</Link>
-          </Button>
+          role === "super_admin" ? (
+            <Button asChild>
+              <Link to="/loans">New loan</Link>
+            </Button>
+          ) : undefined
         }
       />
 
