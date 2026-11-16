@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { Search } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { ResetPasswordDialog, type ResetTarget } from "@/components/reset-password-dialog";
 import { useAuth } from "@/lib/auth";
+import { searchBorrowersById } from "@/lib/borrower-search";
 import { formatKES } from "@/lib/format";
 import {
   useBorrowers,
@@ -250,12 +252,55 @@ export default function BorrowersIndexPage() {
   const { data: staff } = useStaff();
   const showOwner = role === "super_admin";
   const [resetting, setResetting] = useState<ResetTarget | null>(null);
+  const [typed, setTyped] = useState("");
+  const [searched, setSearched] = useState("");
+
+  const shown = useMemo(
+    () => (searched ? searchBorrowersById(borrowers ?? [], searched) : (borrowers ?? [])),
+    [borrowers, searched],
+  );
+  const columnCount = showOwner ? 7 : 5;
+
+  function runSearch(e: React.FormEvent) {
+    e.preventDefault();
+    setSearched(typed.trim());
+  }
+
+  function clearSearch() {
+    setTyped("");
+    setSearched("");
+  }
 
   return (
     <AdminLayout>
       <PageHeader eyebrow="Book" title="Borrowers" action={<AddBorrowerDialog />} />
-      <div className="p-6 md:p-8">
-        <Panel title="All borrowers" meta={`${borrowers?.length ?? 0} records`}>
+      <div className="space-y-4 p-6 md:p-8">
+        <form onSubmit={runSearch} className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full max-w-sm">
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+            <Input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder="Search by ID number"
+              inputMode="numeric"
+              aria-label="Search borrowers by ID number"
+              className="pl-9"
+            />
+          </div>
+          <Button type="submit" disabled={!typed.trim()}>
+            Search
+          </Button>
+          {searched || typed ? (
+            <Button type="button" variant="secondary" onClick={clearSearch}>
+              Clear
+            </Button>
+          ) : null}
+        </form>
+
+        <Panel
+          title={searched ? `Results for "${searched}"` : "All borrowers"}
+          meta={searched ? `${shown.length} found` : `${borrowers?.length ?? 0} records`}
+        >
           <TableWrap>
             <thead>
               <tr className="border-b">
@@ -271,12 +316,20 @@ export default function BorrowersIndexPage() {
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr>
-                  <td colSpan={showOwner ? 7 : 5} className="text-muted-foreground px-5 py-8 text-center">
+                  <td colSpan={columnCount} className="text-muted-foreground px-5 py-8 text-center">
                     Loading…
                   </td>
                 </tr>
+              ) : shown.length === 0 ? (
+                <tr>
+                  <td colSpan={columnCount} className="text-muted-foreground px-5 py-8 text-center">
+                    {searched
+                      ? `No ${showOwner ? "borrower" : "client of yours"} has an ID number matching "${searched}".`
+                      : "No borrowers yet."}
+                  </td>
+                </tr>
               ) : (
-                (borrowers ?? []).map((b) => (
+                shown.map((b) => (
                   <BorrowerRow
                     key={b.id}
                     borrower={b}
