@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tansta
 import { useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import { useAuth } from "./auth";
+import { collectDues, loanArrears, summarizeDues, todayLocal } from "./dues";
 import { frequencyInfo, type RepaymentFrequency } from "./loan-math";
 
 export type InstallmentStatus = "pending" | "paid" | "late" | "penalized";
@@ -39,6 +40,8 @@ export interface Installment {
   due_date: string;
   amount_due: number;
   amount_paid: number;
+  /** Penalty already added to amount_due (zero until the daily job applies one). */
+  penalty: number;
   status: InstallmentStatus;
 }
 
@@ -167,6 +170,7 @@ function mapLoan(row: any): Loan {
       due_date: i.due_date,
       amount_due: Number(i.amount_due),
       amount_paid: Number(i.amount_paid),
+      penalty: Number(i.penalty_applied ?? 0),
       status: i.status,
     }));
   return {
@@ -618,13 +622,21 @@ export function usePortfolioSummary() {
     (p) => p.match_status === "matched" && !p.voided_at && isThisMonth(paymentDate(p)),
   );
   const collected = matchedThisMonth.reduce((s, p) => s + p.amount, 0);
-  const overdueLoans = loans.filter((l) =>
-    l.schedule.some((i) => i.status === "late" || i.status === "penalized"),
-  ).length;
+  const dues = summarizeDues(collectDues(loans, todayLocal()));
 
   return {
     isLoading: loansQuery.isLoading || paymentsQuery.isLoading,
-    summary: { outstanding, disbursed, collected, overdueLoans, loanCount: loans.length },
+    summary: {
+      outstanding,
+      disbursed,
+      collected,
+      overdueLoans: dues.lateLoans,
+      overdueAmount: dues.lateAmount,
+      overdueInstallments: dues.lateInstallments,
+      dueTodayAmount: dues.todayAmount,
+      dueTodayCount: dues.todayCount,
+      loanCount: loans.length,
+    },
     recentPayments: [...payments].slice(0, 5),
     matchedCount: payments.filter((p) => p.match_status === "matched" && !p.voided_at).length,
     matchedThisMonthCount: matchedThisMonth.length,
@@ -759,6 +771,7 @@ export function usePerformance() {
   const loans = loansQuery.data ?? [];
   const payments = paymentsQuery.data ?? [];
 
+  const today = todayLocal();
   const officerOfBorrower = new Map(borrowers.map((b) => [b.id, b.officer_id]));
 
   const rows: OfficerPerformance[] = (staffQuery.data ?? []).map((member) => {
@@ -778,9 +791,7 @@ export function usePerformance() {
             officerOfBorrower.get(p.borrower_id) === member.id,
         )
         .reduce((sum, p) => sum + p.amount, 0),
-      overdueLoans: theirLoans.filter((l) =>
-        l.schedule.some((i) => i.status === "late" || i.status === "penalized"),
-      ).length,
+      overdueLoans: theirLoans.filter((l) => loanArrears(l, today).installments > 0).length,
     };
   });
 

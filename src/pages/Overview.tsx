@@ -23,16 +23,22 @@ function Kpi({
   value,
   note,
   tone,
+  href,
 }: {
   label: string;
   value: string;
   note: string;
   tone?: "teal" | "coral" | "muted";
+  href?: string;
 }) {
   const noteClass =
     tone === "teal" ? "text-teal" : tone === "coral" ? "text-coral" : "text-muted-foreground";
-  return (
-    <div className="bg-card rounded-xl p-5 ring-1 ring-white/10">
+  const card = (
+    <div
+      className={`bg-card h-full rounded-xl p-5 ring-1 ring-white/10 ${
+        href ? "transition-colors hover:ring-white/25" : ""
+      }`}
+    >
       <p className="text-muted-foreground text-[11px] tracking-[0.15em] uppercase">{label}</p>
       <p
         className={`count-in mt-3 font-mono text-2xl font-bold tracking-tight tabular-nums md:text-3xl ${
@@ -47,6 +53,7 @@ function Kpi({
       </p>
     </div>
   );
+  return href ? <Link to={href}>{card}</Link> : card;
 }
 
 function TeamPerformancePanel() {
@@ -143,11 +150,11 @@ export default function OverviewPage() {
       />
 
       <div className="space-y-6 p-6 md:p-8">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           <Kpi
-            label="Outstanding"
+            label="Outstanding balance"
             value={formatKES(summary.outstanding)}
-            note="Live balance"
+            note="Everything still to collect"
             tone="teal"
           />
           <Kpi
@@ -162,10 +169,26 @@ export default function OverviewPage() {
             tone="teal"
           />
           <Kpi
+            label="Overdue amount"
+            value={formatKES(summary.overdueAmount)}
+            note={`${summary.overdueInstallments} installment${
+              summary.overdueInstallments === 1 ? "" : "s"
+            } · see Dues →`}
+            tone="coral"
+            href="/dues"
+          />
+          <Kpi
             label="Overdue loans"
             value={String(summary.overdueLoans)}
-            note="Accounts past due"
+            note="Loans behind on payments"
             tone="coral"
+            href="/dues"
+          />
+          <Kpi
+            label="Due today"
+            value={formatKES(summary.dueTodayAmount)}
+            note={`${summary.dueTodayCount} installment${summary.dueTodayCount === 1 ? "" : "s"}`}
+            href="/dues"
           />
         </div>
 

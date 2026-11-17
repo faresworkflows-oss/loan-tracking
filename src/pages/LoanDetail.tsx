@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
+import { InstallmentStatus } from "@/components/installment-status";
 import { PaymentStatusBadge, RecordedBy } from "@/components/payment-status";
 import { RecordPaymentDialog } from "@/components/record-payment-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
+import { todayLocal } from "@/lib/dues";
 import { formatDate, formatKES, pad2 } from "@/lib/format";
 import {
   channelLabel,
@@ -34,6 +36,7 @@ export default function LoanDetailPage() {
   const [recordOpen, setRecordOpen] = useState(false);
   // Only the super admin handles money; employees can only look.
   const isSuperAdmin = useAuth().role === "super_admin";
+  const today = todayLocal();
 
   async function handleRequestPayment(installmentId: string, amount: number) {
     if (!loan || !borrower) return;
@@ -146,7 +149,7 @@ export default function LoanDetailPage() {
                         )}
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <StatusBadge status={i.status} />
+                        <InstallmentStatus installment={i} today={today} />
                       </td>
                       {isSuperAdmin ? (
                         <td className="px-5 py-3 text-right">

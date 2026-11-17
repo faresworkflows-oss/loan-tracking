@@ -53,6 +53,10 @@ const TONES: Record<string, Tone> = {
   staff_alert: "warn",
   password_reset: "neutral",
   voided: "bad",
+  past_due: "bad",
+  in_grace: "warn",
+  due_today: "warn",
+  upcoming: "neutral",
 };
 
 const LABELS: Record<string, string> = {
@@ -60,6 +64,10 @@ const LABELS: Record<string, string> = {
   account_created: "Account created",
   loan_cleared: "Loan cleared",
   staff_alert: "Staff alert",
+  past_due: "Overdue",
+  in_grace: "In grace",
+  due_today: "Due today",
+  upcoming: "Upcoming",
   password_reset: "Password reset",
 };
 

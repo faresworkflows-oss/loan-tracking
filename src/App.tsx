@@ -13,6 +13,7 @@ import PaymentsPage from "./pages/Payments";
 import NotificationsPage from "./pages/Notifications";
 import ActivityPage from "./pages/Activity";
 import StaffPage from "./pages/Staff";
+import DuesPage from "./pages/Dues";
 import AccountPage from "./pages/Account";
 import LoginPage from "./pages/Login";
 import PortalIndexPage from "./pages/PortalIndex";
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
 
         <Route path="/" element={<RequireStaff><OverviewPage /></RequireStaff>} />
+        <Route path="/dues" element={<RequireStaff><DuesPage /></RequireStaff>} />
         <Route path="/loans" element={<RequireStaff><LoansIndexPage /></RequireStaff>} />
         <Route path="/loans/:loanId" element={<RequireStaff><LoanDetailPage /></RequireStaff>} />
         <Route path="/borrowers" element={<RequireStaff><BorrowersIndexPage /></RequireStaff>} />

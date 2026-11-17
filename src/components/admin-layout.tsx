@@ -4,6 +4,7 @@ import { useAuth, signOut } from "@/lib/auth";
 
 const NAV: { to: string; label: string; end: boolean; superOnly?: boolean }[] = [
   { to: "/", label: "Overview", end: true },
+  { to: "/dues", label: "Dues", end: false },
   { to: "/loans", label: "Loans", end: false },
   { to: "/borrowers", label: "Borrowers", end: false },
   { to: "/payments", label: "Payments", end: false },

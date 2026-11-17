@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { loanArrears, todayLocal } from "@/lib/dues";
 import { formatDate, formatKES } from "@/lib/format";
 import {
   FREQUENCIES,
@@ -42,7 +43,21 @@ import {
   useCreateLoan,
   useLoans,
   useStaff,
+  type Loan,
 } from "@/lib/data";
+
+function OverdueCell({ loan }: { loan: Loan }) {
+  const arrears = loanArrears(loan, todayLocal());
+  if (arrears.amount <= 0) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div>
+      <p className="text-coral font-mono tabular-nums">{formatKES(arrears.amount)}</p>
+      <p className="text-muted-foreground text-[11px]">
+        {arrears.oldestDays} day{arrears.oldestDays === 1 ? "" : "s"} late
+      </p>
+    </div>
+  );
+}
 
 function today() {
   return new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in the user's own timezone
@@ -263,6 +278,7 @@ export default function LoansIndexPage() {
                 {showOfficer ? <Th>Assigned to</Th> : null}
                 <Th right>Principal</Th>
                 <Th right>Balance</Th>
+                <Th right>Overdue</Th>
                 <Th>Term</Th>
                 <Th right>Status</Th>
               </tr>
@@ -270,7 +286,7 @@ export default function LoansIndexPage() {
             <tbody className="divide-y divide-white/5">
               {isLoading ? (
                 <tr>
-                  <td colSpan={showOfficer ? 7 : 6} className="text-muted-foreground px-5 py-8 text-center">
+                  <td colSpan={showOfficer ? 8 : 7} className="text-muted-foreground px-5 py-8 text-center">
                     Loading…
                   </td>
                 </tr>
@@ -299,6 +315,9 @@ export default function LoansIndexPage() {
                     </td>
                     <td className="px-5 py-3 text-right font-mono tabular-nums">
                       {formatKES(loanOutstanding(l))}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <OverdueCell loan={l} />
                     </td>
                     <td className="text-muted-foreground px-5 py-3">{loanTermLabel(l)}</td>
                     <td className="px-5 py-3 text-right">
