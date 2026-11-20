@@ -57,6 +57,7 @@ function Kpi({
 }
 
 function TeamPerformancePanel() {
+  const { session } = useAuth();
   const { isLoading, rows } = usePerformance();
   const active = rows.filter((r) => r.active);
 
@@ -85,8 +86,10 @@ function TeamPerformancePanel() {
               <tr key={m.id} className="ledger-row">
                 <td className="px-5 py-3">
                   {staffLabel(m)}
-                  {m.role === "super_admin" ? (
+                  {m.id === session?.user.id ? (
                     <span className="text-muted-foreground ml-2 text-xs">(you)</span>
+                  ) : m.role === "super_admin" ? (
+                    <span className="text-muted-foreground ml-2 text-xs">(admin)</span>
                   ) : null}
                 </td>
                 <td className="px-5 py-3 text-right font-mono tabular-nums">{m.clients}</td>

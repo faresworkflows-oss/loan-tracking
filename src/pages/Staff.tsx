@@ -131,6 +131,7 @@ function OwnerPicker({
   onChange: (id: string) => void;
   options: OfficerPerformance[];
 }) {
+  const { session } = useAuth();
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger>
@@ -140,7 +141,7 @@ function OwnerPicker({
         {options.map((o) => (
           <SelectItem key={o.id} value={o.id}>
             {staffLabel(o)}
-            {o.role === "super_admin" ? " (you)" : ""}
+            {o.id === session?.user.id ? " (you)" : o.role === "super_admin" ? " (admin)" : ""}
           </SelectItem>
         ))}
       </SelectContent>

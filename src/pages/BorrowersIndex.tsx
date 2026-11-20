@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AdminLayout, PageHeader, Panel, TableWrap, Th } from "@/components/admin-layout";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import { ResetPasswordDialog, type ResetTarget } from "@/components/reset-passwo
 import { useAuth } from "@/lib/auth";
 import { searchBorrowersById } from "@/lib/borrower-search";
 import { formatKES } from "@/lib/format";
+import { chunk, selectionState, setMany, toggleId } from "@/lib/selection";
 import {
   useBorrowers,
   useCreateBorrower,
@@ -34,6 +36,7 @@ import {
   useStaff,
   loanOutstanding,
   staffLabel,
+  staffNameById,
   type Borrower,
   type StaffMember,
 } from "@/lib/data";
@@ -43,7 +46,7 @@ function AddBorrowerDialog() {
   const [issued, setIssued] = useState<{ email: string; password: string } | null>(null);
   const [ownerId, setOwnerId] = useState("");
   const createBorrower = useCreateBorrower();
-  const { role } = useAuth();
+  const { role, session } = useAuth();
   const { data: staff } = useStaff();
   const activeStaff = (staff ?? []).filter((m) => m.active);
 
@@ -138,7 +141,7 @@ function AddBorrowerDialog() {
                       {activeStaff.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
                           {staffLabel(m)}
-                          {m.role === "super_admin" ? " (me)" : ""}
+                          {m.id === session?.user.id ? " (me)" : m.role === "super_admin" ? " (admin)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -207,11 +210,15 @@ function BorrowerRow({
   staff,
   showOwner,
   onReset,
+  selected,
+  onToggle,
 }: {
   borrower: Borrower;
   staff: StaffMember[];
   showOwner: boolean;
   onReset: () => void;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const { id, full_name, phone, national_id } = borrower;
   const { data: theirLoans } = useLoansForBorrower(id);
@@ -221,6 +228,15 @@ function BorrowerRow({
 
   return (
     <tr className="ledger-row">
+      {showOwner ? (
+        <td className="w-10 px-5 py-3">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggle()}
+            aria-label={`Select ${full_name}`}
+          />
+        </td>
+      ) : null}
       <td className="px-5 py-3">
         <Link to={`/borrowers/${id}`} className="hover:text-coral font-medium">
           {full_name}
@@ -246,20 +262,135 @@ function BorrowerRow({
   );
 }
 
+function AssignDialog({
+  open,
+  onClose,
+  picked,
+  target,
+  staff,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  picked: Borrower[];
+  target: StaffMember | undefined;
+  staff: StaffMember[];
+  onDone: () => void;
+}) {
+  const manageStaff = useManageStaff();
+  const [working, setWorking] = useState(false);
+
+  // Anyone already owned by the target is skipped, so nothing pointless is sent.
+  const toMove = picked.filter((b) => b.officer_id !== target?.id);
+  const alreadyThere = picked.length - toMove.length;
+  const name = target ? staffLabel(target) : "";
+
+  async function confirm() {
+    if (!target || toMove.length === 0) return;
+    setWorking(true);
+    let moved = 0;
+    try {
+      // Small batches, so a long list never makes one oversized request.
+      for (const batch of chunk(
+        toMove.map((b) => b.id),
+        50,
+      )) {
+        const result = await manageStaff.mutateAsync({
+          action: "reassign",
+          to_officer_id: target.id,
+          borrower_ids: batch,
+        });
+        moved += result.moved ?? 0;
+      }
+      toast.success(`Assigned ${moved} borrower${moved === 1 ? "" : "s"} to ${name}`);
+      onDone();
+    } catch (err) {
+      toast.error(moved > 0 ? `Assigned ${moved}, then it stopped` : "Could not assign", {
+        description: (err as Error).message,
+      });
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && !working && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="font-display">
+            {toMove.length > 0
+              ? `Assign ${toMove.length} borrower${toMove.length === 1 ? "" : "s"} to ${name}?`
+              : "Nothing to assign"}
+          </DialogTitle>
+          <DialogDescription>
+            {toMove.length > 0
+              ? `They'll show up in ${name}'s list straight away and leave their current owners' lists.`
+              : `Everyone selected already belongs to ${name}.`}
+            {toMove.length > 0 && alreadyThere > 0
+              ? ` ${alreadyThere} already ${alreadyThere === 1 ? "belongs" : "belong"} to ${name} and will be skipped.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        {toMove.length > 0 ? (
+          <ul className="bg-muted/40 max-h-52 space-y-1 overflow-y-auto rounded-lg p-3 text-sm ring-1 ring-white/10">
+            {toMove.slice(0, 8).map((b) => (
+              <li key={b.id} className="flex justify-between gap-4">
+                <span>{b.full_name}</span>
+                <span className="text-muted-foreground text-xs">
+                  now with {staffNameById(staff, b.officer_id)}
+                </span>
+              </li>
+            ))}
+            {toMove.length > 8 ? (
+              <li className="text-muted-foreground text-xs">and {toMove.length - 8} more</li>
+            ) : null}
+          </ul>
+        ) : null}
+        <DialogFooter>
+          <Button onClick={confirm} disabled={working || toMove.length === 0}>
+            {working ? "Assigning…" : "Assign"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function BorrowersIndexPage() {
   const { data: borrowers, isLoading } = useBorrowers();
-  const { role } = useAuth();
+  const { role, session } = useAuth();
   const { data: staff } = useStaff();
   const showOwner = role === "super_admin";
   const [resetting, setResetting] = useState<ResetTarget | null>(null);
   const [typed, setTyped] = useState("");
   const [searched, setSearched] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [assignTo, setAssignTo] = useState("");
+  const [assignOpen, setAssignOpen] = useState(false);
 
-  const shown = useMemo(
-    () => (searched ? searchBorrowersById(borrowers ?? [], searched) : (borrowers ?? [])),
-    [borrowers, searched],
+  const activeStaff = (staff ?? []).filter((m) => m.active);
+  const optionLabel = (m: StaffMember) =>
+    staffLabel(m) + (m.id === session?.user.id ? " (me)" : m.role === "super_admin" ? " (admin)" : "");
+
+  const shown = useMemo(() => {
+    let list = searched ? searchBorrowersById(borrowers ?? [], searched) : (borrowers ?? []);
+    if (showOwner && ownerFilter !== "all") {
+      list = list.filter((b) => (ownerFilter === "none" ? !b.officer_id : b.officer_id === ownerFilter));
+    }
+    return list;
+  }, [borrowers, searched, showOwner, ownerFilter]);
+
+  const shownIds = useMemo(() => shown.map((b) => b.id), [shown]);
+  const headState = selectionState(selected, shownIds);
+  const picked = useMemo(
+    () => (borrowers ?? []).filter((b) => selected.has(b.id)),
+    [borrowers, selected],
   );
-  const columnCount = showOwner ? 7 : 5;
+  const hiddenPicked = picked.filter((b) => !shownIds.includes(b.id)).length;
+  const target = activeStaff.find((m) => m.id === assignTo);
+  const filtering = !!searched || ownerFilter !== "all";
+  const columnCount = showOwner ? 8 : 5;
 
   function runSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -295,15 +426,84 @@ export default function BorrowersIndexPage() {
               Clear
             </Button>
           ) : null}
+          {showOwner ? (
+            <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+              <SelectTrigger className="w-[210px]" aria-label="Show borrowers of one employee">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All employees</SelectItem>
+                {(staff ?? []).map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {optionLabel(m)}
+                  </SelectItem>
+                ))}
+                <SelectItem value="none">Unassigned</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : null}
         </form>
 
+        {showOwner && picked.length > 0 ? (
+          <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl p-4 ring-1 ring-white/10">
+            <p className="text-sm font-medium">
+              {picked.length} selected
+              {hiddenPicked > 0 ? (
+                <span className="text-muted-foreground font-normal">
+                  {" "}
+                  ({hiddenPicked} hidden by the search or filter)
+                </span>
+              ) : null}
+            </p>
+            <Select value={assignTo} onValueChange={setAssignTo}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Assign to…" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeStaff.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {optionLabel(m)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button disabled={!target} onClick={() => setAssignOpen(true)}>
+              Assign
+            </Button>
+            <Button variant="secondary" onClick={() => setSelected(new Set())}>
+              Clear selection
+            </Button>
+          </div>
+        ) : null}
+
         <Panel
-          title={searched ? `Results for "${searched}"` : "All borrowers"}
-          meta={searched ? `${shown.length} found` : `${borrowers?.length ?? 0} records`}
+          title={
+            searched
+              ? `Results for "${searched}"`
+              : ownerFilter === "none"
+                ? "Unassigned borrowers"
+                : ownerFilter !== "all"
+                  ? `${staffNameById(staff, ownerFilter)}'s borrowers`
+                  : "All borrowers"
+          }
+          meta={filtering ? `${shown.length} found` : `${borrowers?.length ?? 0} records`}
         >
           <TableWrap>
             <thead>
               <tr className="border-b">
+                {showOwner ? (
+                  <th className="w-10 px-5 py-3">
+                    <Checkbox
+                      checked={
+                        headState === "all" ? true : headState === "some" ? "indeterminate" : false
+                      }
+                      onCheckedChange={() =>
+                        setSelected((s) => setMany(s, shownIds, headState !== "all"))
+                      }
+                      aria-label="Select everyone shown"
+                    />
+                  </th>
+                ) : null}
                 <Th>Name</Th>
                 <Th>Phone</Th>
                 <Th>National ID</Th>
@@ -325,7 +525,9 @@ export default function BorrowersIndexPage() {
                   <td colSpan={columnCount} className="text-muted-foreground px-5 py-8 text-center">
                     {searched
                       ? `No ${showOwner ? "borrower" : "client of yours"} has an ID number matching "${searched}".`
-                      : "No borrowers yet."}
+                      : ownerFilter !== "all"
+                        ? "No borrowers match this filter."
+                        : "No borrowers yet."}
                   </td>
                 </tr>
               ) : (
@@ -336,6 +538,8 @@ export default function BorrowersIndexPage() {
                     staff={staff ?? []}
                     showOwner={showOwner}
                     onReset={() => setResetting({ kind: "borrower", id: b.id, name: b.full_name })}
+                    selected={selected.has(b.id)}
+                    onToggle={() => setSelected((s) => toggleId(s, b.id))}
                   />
                 ))
               )}
@@ -344,6 +548,18 @@ export default function BorrowersIndexPage() {
         </Panel>
       </div>
       <ResetPasswordDialog target={resetting} onClose={() => setResetting(null)} />
+      <AssignDialog
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        picked={picked}
+        target={target}
+        staff={staff ?? []}
+        onDone={() => {
+          setAssignOpen(false);
+          setSelected(new Set());
+          setAssignTo("");
+        }}
+      />
     </AdminLayout>
   );
 }
